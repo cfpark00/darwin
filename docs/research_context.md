@@ -13,8 +13,12 @@ A 2D grid world where agents with neural network "brains" live, compete for reso
 
 ### Agent Architecture
 - **Brain**: 2-layer LSTM network (hidden_dim=8)
-- **Inputs**: Food level, temperature, toxin detection, 4 contact sensors (front/back/left/right)
-- **Outputs**: 7 actions (eat, forward, left, right, stay, reproduce, attack)
+- **Full version** (`agent.py`):
+  - Inputs (7): Food, temperature, toxin detection, 4 contact sensors
+  - Outputs (7): eat, forward, left, right, stay, reproduce, attack
+- **Simple version** (`agent_simple.py`): For pretrain/thermotaxis environments
+  - Inputs (6): Food, temperature, 4 contact sensors (no toxin)
+  - Outputs (6): eat, forward, left, right, stay, reproduce (no attack)
 - **Evolution**: Offspring inherit parent's neural weights + Gaussian mutation (std=0.1)
 
 ### World Types
@@ -60,6 +64,8 @@ A 2D grid world where agents with neural network "brains" live, compete for reso
 - Thermotaxis environment with dynamic temperature (inspired by Ramot et al. 2008)
 - Temperature-based reproduction probability system
 - Y-density plot for thermotaxis runs
+- Simple simulation infrastructure (`agent_simple.py`, `simulation_simple.py`) for pretrain/thermotaxis
+- Git repository initialized and pushed to github.com/cfpark00/darwin
 
 ### Infrastructure Ready
 - **Default world**: 512x512 Gaussian, runs at ~115 steps/s

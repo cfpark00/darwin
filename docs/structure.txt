@@ -48,10 +48,12 @@ darwin/
 │
 ├── src/                         # Python source code
 │   ├── __init__.py
-│   ├── agent.py                 # Agent neural network (2-layer LSTM, flat params)
+│   ├── agent.py                 # Agent neural network (2-layer LSTM, 7 in / 7 out)
+│   ├── agent_simple.py          # Simplified agent (6 in / 6 out, no toxin/attack)
 │   ├── physics.py               # Physics definitions (actions, movement, conflicts)
 │   ├── world.py                 # World creation dispatcher
-│   ├── simulation.py            # Main simulation engine (Simulation class)
+│   ├── simulation.py            # Main simulation engine (full, with toxin/attack)
+│   ├── simulation_simple.py     # Simplified simulation (no toxin/attack)
 │   ├── utils.py                 # Utilities (init_directory, make_key)
 │   │
 │   ├── worlds/                  # Modular world generators
@@ -64,8 +66,10 @@ darwin/
 │   │   └── thermotaxis.py       # Dynamic temperature with phase lag
 │   │
 │   └── scripts/                 # Orchestration scripts (entry points)
-│       ├── run.py               # Main experiment runner
-│       ├── transfer.py          # Transfer experiment (load agents into new world)
+│       ├── run.py               # Main experiment runner (full simulation)
+│       ├── run_simple.py        # Runner for simple simulation (pretrain/thermotaxis)
+│       ├── transfer.py          # Transfer experiment (full simulation)
+│       ├── transfer_simple.py   # Transfer for simple simulation (thermotaxis)
 │       └── run_maze_dynamic.py  # Dynamic maze with moving goal
 │
 ├── data/                        # Experiment outputs (gitignored)
