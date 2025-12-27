@@ -1,0 +1,45 @@
+# Darwin - Bridge World Configuration
+
+world:
+  size: 256
+  initial_agents: 100
+
+arena:
+  type: bridge
+  strip_width: 32
+  bridge_height: 16
+  resource_fertile: 25.0
+  resource_bridge: 12.0
+  resource_barren: 5.0
+  temperature_min: 0.0
+  temperature_max: 1.0
+  temperature_length_scale: 400.0
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+agent:
+  hidden_dim: 8
+  num_layers: 2
+  internal_noise_dim: 4
+  mutation_std: 0.1
+  action_temperature: 1.0
+
+energy:
+  initial: 100.0
+  max: 100.0
+  offspring: 25.0
+  cost_eat: 0.5
+  cost_move: 3.0
+  cost_stay: 0.5
+  cost_reproduce: 30.0
+  cost_attack: 5.0
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1
+  toxin_detection_radius: 5
+  toxin_confusion_matrix:
+    - [0.9, 0.1]
+    - [0.1, 0.9]

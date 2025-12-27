@@ -1,0 +1,50 @@
+# Darwin - Thermotaxis World Configuration
+# Soil-like environment with dynamic temperature for evolving thermotactic behavior
+
+world:
+  size: 512
+  initial_agents: 1024
+
+arena:
+  type: thermotaxis
+  # Food: gradient (0 at bottom, max at top) + Gaussian noise
+  food_max: 20.0
+  food_noise_amplitude: 8.0
+  food_length_scale: 30.0
+  # Temperature: sinusoidal at surface, decays + lags with depth
+  temperature_period: 1000       # steps per cycle
+  temperature_damping_depth: 64  # depth at which amplitude decays by e
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+agent:
+  hidden_dim: 8
+  num_layers: 2
+  internal_noise_dim: 4
+  mutation_std: 0.1
+  action_temperature: 1.0
+
+energy:
+  initial: 100.0
+  max: 100.0
+  offspring: 25.0
+  cost_eat: 0.5
+  cost_move: 3.0
+  cost_stay: 0.5
+  cost_reproduce: 30.0
+  cost_attack: 5.0
+
+# Reproduction: success probability depends on temperature
+reproduction:
+  temp_threshold: 0.5  # 100% success below this
+  temp_max: 1.0        # 0% success at this temp
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1
+  toxin_detection_radius: 5
+  toxin_confusion_matrix:
+    - [0.9, 0.1]
+    - [0.1, 0.9]

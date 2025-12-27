@@ -1,0 +1,54 @@
+# Darwin - Pretrain World Configuration
+# Simple environment for basic survival training
+#
+# Food starts high (30) so initial population doesn't just die,
+# then reduces to 12 so agents learn to move and eat to survive.
+
+world:
+  size: 256
+  initial_agents: 512
+
+arena:
+  type: pretrain
+  # Food curriculum: starts high, decays to final level
+  food_init: 30.0
+  food_final: 12.0
+  food_decay_steps: 10000
+  # Static Gaussian temperature (no effect on reproduction here)
+  temperature_min: 0.0
+  temperature_max: 1.0
+  temperature_length_scale: 200.0
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+agent:
+  hidden_dim: 8
+  num_layers: 2
+  internal_noise_dim: 4
+  mutation_std: 0.1
+  action_temperature: 1.0
+
+energy:
+  initial: 100.0
+  max: 100.0
+  offspring: 25.0
+  cost_eat: 0.5
+  cost_move: 3.0
+  cost_stay: 0.5
+  cost_reproduce: 30.0
+  cost_attack: 5.0
+
+# No temperature-based reproduction penalty in pretrain
+reproduction:
+  temp_threshold: 1.0  # Always 100% success (threshold >= max temp)
+  temp_max: 1.0
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1
+  toxin_detection_radius: 5
+  toxin_confusion_matrix:
+    - [0.9, 0.1]
+    - [0.1, 0.9]

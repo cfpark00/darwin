@@ -1,0 +1,47 @@
+# Darwin - Dynamic Maze World Configuration
+# Goal moves when >100 agents reach it
+# All passable areas have resource 12, only fertile goal has high resources
+
+world:
+  size: 256  # 8 cells x 32 pixels/cell
+  initial_agents: 512
+
+arena:
+  type: maze
+  cell_size: 32
+  resource_start: 12.0   # Same as passable
+  resource_passable: 12.0
+  resource_goal: 50.0    # Fertile goal area
+  resource_wall: 0.0
+  temperature_min: 0.0
+  temperature_max: 1.0
+  temperature_length_scale: 400.0
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+agent:
+  hidden_dim: 8
+  num_layers: 2
+  internal_noise_dim: 4
+  mutation_std: 0.1
+  action_temperature: 1.0
+
+energy:
+  initial: 100.0
+  max: 100.0
+  offspring: 25.0
+  cost_eat: 0.5
+  cost_move: 3.0
+  cost_stay: 0.5
+  cost_reproduce: 30.0
+  cost_attack: 5.0
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1
+  toxin_detection_radius: 5
+  toxin_confusion_matrix:
+    - [0.9, 0.1]
+    - [0.1, 0.9]

@@ -1,0 +1,21 @@
+# Darwin - Bridge Explorer Transfer Experiment
+# Take agents that made it to the right side (explorers) and see if they do even better
+
+output_dir: "data/bridge_explorers"
+world_config: "configs/world/bridge.yaml"
+
+# Source checkpoint - from the first bridge experiment
+transfer:
+  checkpoint_path: "data/bridge/checkpoints/ckpt_002750.pkl"
+  num_agents: 100
+  initial_energy: 100.0
+  spawn_region: [0, 256, 0, 32]  # Spawn on left side again
+  position_filter: [224, 256, 0, 256]  # Select from right fertile area [x_min, x_max, y_min, y_max]
+
+seed: 1
+max_steps: 8000
+min_buffer_size: 4096
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 250

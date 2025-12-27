@@ -1,0 +1,20 @@
+# Darwin - Bridge Transfer Experiment
+# Load evolved agents from a checkpoint and place in new environment
+
+output_dir: "data/bridge"
+world_config: "configs/world/bridge.yaml"
+
+# Source checkpoint to load agents from
+transfer:
+  checkpoint_path: "data/run_default_archived/checkpoints/ckpt_100000.pkl"
+  num_agents: 100  # Number of random agents to sample
+  initial_energy: 100.0  # Energy to give transferred agents
+  spawn_region: [0, 256, 0, 32]  # [y_min, y_max, x_min, x_max] - left strip only
+
+seed: 0
+max_steps: 8000
+min_buffer_size: 4096
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 250
