@@ -112,8 +112,6 @@ def log_detailed(step: int, state: dict, stats: dict, output_dir: Path, world_co
     extent = [0, size, 0, size]
     resource_max = state["world"]["resource_max"]
     im = ax.imshow(state["world"]["resource"], cmap="copper", vmin=0, vmax=resource_max, extent=extent, origin='lower')
-    # Temperature overlay
-    ax.imshow(state["world"]["temperature"], cmap="coolwarm", alpha=0.3, extent=extent, origin='lower')
     alive = state["alive"]
     positions = state["positions"][alive]
     if len(positions) > 0:
