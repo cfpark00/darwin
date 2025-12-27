@@ -34,7 +34,6 @@ energy:
   cost_move: 3.0
   cost_stay: 0.5
   cost_reproduce: 30.0
-  cost_attack: 5.0
 
 # Reproduction: success probability depends on temperature
 reproduction:
@@ -44,7 +43,3 @@ reproduction:
 sensors:
   food_noise_std: 0.1
   temperature_noise_std: 0.1
-  toxin_detection_radius: 5
-  toxin_confusion_matrix:
-    - [0.9, 0.1]
-    - [0.1, 0.9]
