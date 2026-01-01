@@ -105,7 +105,10 @@ def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Pa
         "steps": [],
         "population": [],
         "actions": [],
+        "y_density": [],  # List of y-position histograms over time
     }
+    y_bins = 64  # Number of bins for y-position histogram
+    world_size = world_config["world"]["size"]
 
     log_file = open(output_dir / "logs" / "base_log.jsonl", "w")
 
@@ -121,6 +124,11 @@ def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Pa
     history["population"].append(stats["num_alive"])
     action_counts = compute_action_counts(state, actions)
     history["actions"].append([action_counts[name] for name in ACTION_NAMES])
+    # Record y-density histogram
+    alive = state["alive"]
+    y_positions = np.array(state["positions"][alive][:, 0])
+    y_hist, _ = np.histogram(y_positions, bins=y_bins, range=(0, world_size))
+    history["y_density"].append(y_hist)
 
     log_detailed(0, state, stats, output_dir, world_config, history)
     save_checkpoint(0, state, sim, output_dir)
@@ -139,6 +147,11 @@ def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Pa
             history["population"].append(stats["num_alive"])
             action_counts = compute_action_counts(state, actions)
             history["actions"].append([action_counts[name] for name in ACTION_NAMES])
+            # Record y-density histogram
+            alive = state["alive"]
+            y_positions = np.array(state["positions"][alive][:, 0])
+            y_hist, _ = np.histogram(y_positions, bins=y_bins, range=(0, world_size))
+            history["y_density"].append(y_hist)
 
             pbar.set_postfix({
                 "alive": stats["num_alive"],

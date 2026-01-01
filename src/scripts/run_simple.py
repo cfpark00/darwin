@@ -153,20 +153,31 @@ def log_detailed(step: int, state: dict, stats: dict, output_dir: Path, world_co
         plt.savefig(output_dir / "figures" / "action_ratio.png", dpi=100)
         plt.close()
 
-    # Y-density plot
-    alive = state["alive"]
-    positions = state["positions"][alive]
-    if len(positions) > 0:
-        y_positions = np.array(positions[:, 0])
-        fig, ax = plt.subplots(1, 1, figsize=(10, 4))
-        ax.hist(y_positions, bins=50, range=(0, size), color="steelblue", edgecolor="black", alpha=0.7)
-        ax.set_xlabel("Y position (0=bottom, max=top)")
-        ax.set_ylabel("Agent count")
-        ax.set_title(f"Agent Y-Distribution | Step {step} | {len(y_positions)} agents")
-        ax.set_xlim(0, size)
-        ax.grid(True, alpha=0.3)
+    # Y-density heatmap over time
+    if "y_density" in history and len(history["y_density"]) > 1:
+        y_density_array = np.array(history["y_density"]).T  # Shape: (y_bins, num_steps)
+        steps_array = np.array(history["steps"])
+
+        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+        # Normalize each column (timestep) to show density distribution
+        col_sums = y_density_array.sum(axis=0, keepdims=True)
+        col_sums = np.maximum(col_sums, 1)  # Avoid division by zero
+        y_density_norm = y_density_array / col_sums
+
+        im = ax.imshow(
+            y_density_norm,
+            aspect='auto',
+            origin='lower',
+            cmap='hot',
+            extent=[steps_array[0], steps_array[-1], 0, size],
+            interpolation='nearest'
+        )
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Y position")
+        ax.set_title("Agent Y-Distribution Over Time (normalized density)")
+        plt.colorbar(im, ax=ax, label="Density")
         plt.tight_layout()
-        plt.savefig(output_dir / "figures" / "y_density.png", dpi=100)
+        plt.savefig(output_dir / "figures" / "y_density.png", dpi=150)
         plt.close()
 
 
@@ -200,7 +211,9 @@ def run_experiment(world_config: dict, run_config: dict, output_dir: Path, debug
         "steps": [],
         "population": [],
         "actions": [],
+        "y_density": [],  # List of y-position histograms over time
     }
+    y_bins = 64  # Number of bins for y-position histogram
 
     log_file = open(output_dir / "logs" / "base_log.jsonl", "w")
 
@@ -217,6 +230,11 @@ def run_experiment(world_config: dict, run_config: dict, output_dir: Path, debug
     history["population"].append(stats["num_alive"])
     action_counts = compute_action_counts(state, actions)
     history["actions"].append([action_counts[name] for name in ACTION_NAMES])
+    # Record y-density histogram
+    alive = state["alive"]
+    y_positions = np.array(state["positions"][alive][:, 0])
+    y_hist, _ = np.histogram(y_positions, bins=y_bins, range=(0, world_config["world"]["size"]))
+    history["y_density"].append(y_hist)
 
     log_detailed(0, state, stats, output_dir, world_config, history)
     save_checkpoint(0, state, sim, output_dir)
@@ -236,6 +254,11 @@ def run_experiment(world_config: dict, run_config: dict, output_dir: Path, debug
             history["population"].append(stats["num_alive"])
             action_counts = compute_action_counts(state, actions)
             history["actions"].append([action_counts[name] for name in ACTION_NAMES])
+            # Record y-density histogram
+            alive = state["alive"]
+            y_positions = np.array(state["positions"][alive][:, 0])
+            y_hist, _ = np.histogram(y_positions, bins=y_bins, range=(0, world_config["world"]["size"]))
+            history["y_density"].append(y_hist)
 
             pbar.set_postfix({
                 "alive": stats["num_alive"],

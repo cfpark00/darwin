@@ -164,6 +164,8 @@ class Simulation:
         self.confusion_matrix = jnp.array(world_config["sensors"]["toxin_confusion_matrix"])
         self.action_temperature = world_config["agent"]["action_temperature"]
         self.max_energy = world_config["energy"]["max"]
+        self.base_cost = world_config["energy"]["base_cost"]
+        self.base_cost_incremental = world_config["energy"]["base_cost_incremental"]
         self.mutation_std = world_config["agent"]["mutation_std"]
         self.offspring_energy = world_config["energy"]["offspring"]
         self.eat_fraction = world_config["resource"]["eat_fraction"]
@@ -183,7 +185,8 @@ class Simulation:
         self.toxin_kernel = _make_circular_kernel(self.detection_radius)
 
         # Pre-extract all config values needed for JIT
-        self._energy_costs = jnp.array([
+        # Action-specific costs (added on top of base_cost)
+        self._action_costs = jnp.array([
             world_config["energy"]["cost_eat"],
             world_config["energy"]["cost_move"],
             world_config["energy"]["cost_move"],
@@ -207,12 +210,14 @@ class Simulation:
         confusion_matrix = self.confusion_matrix
         action_temperature = self.action_temperature
         max_energy = self.max_energy
+        base_cost = self.base_cost
+        base_cost_incremental = self.base_cost_incremental
         mutation_std = self.mutation_std
         offspring_energy = self.offspring_energy
         eat_fraction = self.eat_fraction
         regen_timescale = self.regen_timescale
         toxin_kernel = self.toxin_kernel
-        energy_costs = self._energy_costs
+        action_costs = self._action_costs
         repro_temp_threshold = self.repro_temp_threshold
         repro_temp_max = self.repro_temp_max
 
@@ -271,11 +276,13 @@ class Simulation:
             actions = jnp.where(alive, actions, STAY)
 
             # === Phase 2: Energy costs ===
-            # Metabolic penalty: proportional to current energy (soft cap)
-            # penalty = energy / max_energy, so at 100 energy: +1, at 50: +0.5, at 200: +2
-            metabolic_penalty = energies / max_energy
-            action_energy_costs = energy_costs[actions] + metabolic_penalty
-            energies = energies - action_energy_costs * alive.astype(jnp.float32)
+            # Total cost = base_cost + base_cost_incremental * energy + action_cost
+            # base_cost: minimum cost for any action
+            # base_cost_incremental * energy: soft cap (higher energy = higher cost)
+            # action_cost: action-specific additional cost
+            energy_penalty = base_cost_incremental * energies
+            total_action_costs = base_cost + energy_penalty + action_costs[actions]
+            energies = energies - total_action_costs * alive.astype(jnp.float32)
 
             # === Phase 3: Attacks (fully parallel, no K cap) ===
             deltas = _get_direction_deltas()

@@ -134,6 +134,11 @@ class SimulationSimple:
         self.temp_noise_std = world_config["sensors"]["temperature_noise_std"]
         self.action_temperature = world_config["agent"]["action_temperature"]
         self.max_energy = world_config["energy"]["max"]
+        self.base_cost = world_config["energy"]["base_cost"]
+        self.base_cost_incremental = world_config["energy"]["base_cost_incremental"]
+        # Optional age/temperature penalties (default 0 for backward compatibility)
+        self.base_cost_age_incremental = world_config["energy"].get("base_cost_age_incremental", 0.0)
+        self.base_cost_temperature_incremental = world_config["energy"].get("base_cost_temperature_incremental", 0.0)
         self.mutation_std = world_config["agent"]["mutation_std"]
         self.offspring_energy = world_config["energy"]["offspring"]
         self.eat_fraction = world_config["resource"]["eat_fraction"]
@@ -149,8 +154,9 @@ class SimulationSimple:
         self.is_thermotaxis = arena_type == "thermotaxis"
         self.is_pretrain = arena_type == "pretrain"
 
-        # Energy costs - 6 actions only (no attack)
-        self._energy_costs = jnp.array([
+        # Action-specific costs - 6 actions only (no attack)
+        # These are added on top of base_cost
+        self._action_costs = jnp.array([
             world_config["energy"]["cost_eat"],
             world_config["energy"]["cost_move"],
             world_config["energy"]["cost_move"],
@@ -171,21 +177,25 @@ class SimulationSimple:
         temp_noise_std = self.temp_noise_std
         action_temperature = self.action_temperature
         max_energy = self.max_energy
+        base_cost = self.base_cost
+        base_cost_incremental = self.base_cost_incremental
+        base_cost_age_incremental = self.base_cost_age_incremental
+        base_cost_temperature_incremental = self.base_cost_temperature_incremental
         mutation_std = self.mutation_std
         offspring_energy = self.offspring_energy
         eat_fraction = self.eat_fraction
         regen_timescale = self.regen_timescale
-        energy_costs = self._energy_costs
+        action_costs = self._action_costs
         repro_temp_threshold = self.repro_temp_threshold
         repro_temp_max = self.repro_temp_max
 
-        @partial(jax.jit, static_argnums=(10,))
+        @partial(jax.jit, static_argnums=(11,))
         def step_jit(
             key,
             # World arrays
             world_resource, world_resource_base, world_temperature,
             # Agent arrays
-            positions, orientations, params, agent_states, energies, alive,
+            positions, orientations, params, agent_states, energies, alive, ages,
             # Scalar (static)
             max_agents
         ):
@@ -232,9 +242,14 @@ class SimulationSimple:
             actions = jnp.where(alive, actions, STAY)
 
             # === Phase 2: Energy costs ===
-            metabolic_penalty = energies / max_energy
-            action_energy_costs = energy_costs[actions] + metabolic_penalty
-            energies = energies - action_energy_costs * alive.astype(jnp.float32)
+            # Total cost = base_cost + energy_penalty + age_penalty + temp_penalty + action_cost
+            energy_penalty = base_cost_incremental * energies
+            age_penalty = base_cost_age_incremental * ages
+            agent_temps = world_temperature[positions[:, 0], positions[:, 1]]
+            # Optimal temperature is 0.5 - penalty increases with distance from 0.5
+            temp_penalty = base_cost_temperature_incremental * jnp.abs(agent_temps - 0.5)
+            total_action_costs = base_cost + energy_penalty + age_penalty + temp_penalty + action_costs[actions]
+            energies = energies - total_action_costs * alive.astype(jnp.float32)
 
             # No attack phase
 
@@ -349,6 +364,9 @@ class SimulationSimple:
             energies = energies.at[safe_dead_idx].set(
                 jnp.where(valid_arr, offspring_energy, energies[safe_dead_idx])
             )
+            ages = ages.at[safe_dead_idx].set(
+                jnp.where(valid_arr, 0, ages[safe_dead_idx])
+            )
             alive = alive.at[safe_dead_idx].set(
                 jnp.where(valid_arr, True, alive[safe_dead_idx])
             )
@@ -373,14 +391,18 @@ class SimulationSimple:
             # === Phase 6: Energy deaths ===
             alive = alive & (energies > 0)
 
-            # === Phase 7: Resource regeneration ===
+            # === Phase 7: Age increment ===
+            # Increment age for all alive agents
+            ages = ages + alive.astype(jnp.int32)
+
+            # === Phase 8: Resource regeneration ===
             world_resource = regenerate_resources(world_resource, world_resource_base, regen_timescale)
 
             num_alive = jnp.sum(alive)
 
             return (
                 world_resource, positions, orientations, params,
-                agent_states, energies, alive, actions, num_alive, has_collision
+                agent_states, energies, alive, ages, actions, num_alive, has_collision
             )
 
         return step_jit
@@ -412,6 +434,7 @@ class SimulationSimple:
 
         energies = jnp.zeros(max_agents)
         energies = energies.at[:num_agents].set(self.config["energy"]["initial"])
+        ages = jnp.zeros(max_agents, dtype=jnp.int32)
         alive = jnp.zeros(max_agents, dtype=bool)
         alive = alive.at[:num_agents].set(True)
 
@@ -422,6 +445,7 @@ class SimulationSimple:
             "params": params,
             "states": states,
             "energies": energies,
+            "ages": ages,
             "alive": alive,
             "max_agents": max_agents,
             "step": 0,
@@ -473,6 +497,7 @@ class SimulationSimple:
 
         energies = jnp.zeros(max_agents)
         energies = energies.at[:num_agents].set(initial_energy)
+        ages = jnp.zeros(max_agents, dtype=jnp.int32)
         alive = jnp.zeros(max_agents, dtype=bool)
         alive = alive.at[:num_agents].set(True)
 
@@ -483,6 +508,7 @@ class SimulationSimple:
             "params": params,
             "states": states,
             "energies": energies,
+            "ages": ages,
             "alive": alive,
             "max_agents": max_agents,
             "step": 0,
@@ -498,6 +524,7 @@ class SimulationSimple:
         positions = jnp.concatenate([state["positions"], jnp.zeros((grow_by, 2), dtype=jnp.int32)])
         orientations = jnp.concatenate([state["orientations"], jnp.zeros(grow_by, dtype=jnp.int32)])
         energies = jnp.concatenate([state["energies"], jnp.zeros(grow_by)])
+        ages = jnp.concatenate([state["ages"], jnp.zeros(grow_by, dtype=jnp.int32)])
         alive = jnp.concatenate([state["alive"], jnp.zeros(grow_by, dtype=bool)])
 
         new_params = _init_params_batched(key, grow_by, self.hidden_dim, self.internal_noise_dim)
@@ -516,6 +543,7 @@ class SimulationSimple:
             "params": params,
             "states": states,
             "energies": energies,
+            "ages": ages,
             "alive": alive,
             "max_agents": new_max,
         }
@@ -539,12 +567,12 @@ class SimulationSimple:
 
         (
             new_resource, new_positions, new_orientations, new_params,
-            new_states, new_energies, new_alive, actions, num_alive, has_collision
+            new_states, new_energies, new_alive, new_ages, actions, num_alive, has_collision
         ) = self._step_jit(
             key,
             world["resource"], world["resource_base"], world["temperature"],
             state["positions"], state["orientations"], state["params"],
-            state["states"], state["energies"], state["alive"],
+            state["states"], state["energies"], state["alive"], state["ages"],
             max_agents
         )
 
@@ -564,6 +592,7 @@ class SimulationSimple:
             "params": new_params,
             "states": new_states,
             "energies": new_energies,
+            "ages": new_ages,
             "alive": new_alive,
             "max_agents": max_agents,
             "step": state["step"] + 1,

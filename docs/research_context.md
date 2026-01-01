@@ -42,10 +42,18 @@ A 2D grid world where agents with neural network "brains" live, compete for reso
 
 ### Energy System
 - **Initial**: 100
-- **Soft cap**: Metabolic penalty = `energy/100` added to all action costs
-  - At energy 100: +1 cost to all actions
+- **Base cost**: 0.5 per step (fixed metabolism)
+- **Energy penalty**: `base_cost_incremental * energy` (default 0.01)
+  - At energy 100: +1.0 cost to all actions
   - At energy 50: +0.5 cost
   - Creates pressure against hoarding without hard limit
+- **Age penalty** (thermotaxis only): `base_cost_age_incremental * age` (default 0.001)
+  - At age 1000: +1.0 cost to all actions
+  - Simulates physiological aging
+- **Temperature penalty** (thermotaxis only): `base_cost_temperature_incremental * |temp - 0.5|`
+  - Optimal temperature: 0.5
+  - At temp extremes (0 or 1): +0.375 cost
+- **Total cost**: `base_cost + energy_penalty + age_penalty + temp_penalty + action_cost`
 - **Death**: Energy <= 0
 
 ## Current State (2025-12-27)
@@ -65,6 +73,11 @@ A 2D grid world where agents with neural network "brains" live, compete for reso
 - Temperature-based reproduction probability system
 - Y-density plot for thermotaxis runs
 - Simple simulation infrastructure (`agent_simple.py`, `simulation_simple.py`) for pretrain/thermotaxis
+- Parametrized energy cost system (base + incremental + action costs)
+- Aging system for thermotaxis (metabolic cost scales with age)
+- Temperature-dependent metabolism (optimal at temp=0.5)
+- Corrected temperature model (mean gradient from 0.5 at surface to 0.25 at bottom)
+- Y-density heatmap visualization (time vs y-position)
 - Git repository initialized and pushed to github.com/cfpark00/darwin
 
 ### Infrastructure Ready
@@ -103,7 +116,7 @@ Tests adaptability by moving the goal when agents congregate:
 - Goal cycles through all passable cells in the maze
 - Tracks goal movement history and population dynamics
 
-### Thermotaxis Experiment (New)
+### Thermotaxis Experiment
 Tests temperature-seeking behavior inspired by C. elegans thermotaxis (Ramot et al. 2008):
 
 **Pretrain Phase** (10k steps):
@@ -112,17 +125,21 @@ Tests temperature-seeking behavior inspired by C. elegans thermotaxis (Ramot et 
 - Static Gaussian temperature, no reproduction penalty
 - Goal: agents learn basic survival (eating, moving)
 
-**Thermotaxis Phase** (100k steps):
-- 512x512 grid, 1024 agents transferred from pretrain
-- Food: linear gradient (0 at bottom, 20 at top) + Gaussian noise (std=2.0)
+**Thermotaxis Phase** (50k steps):
+- 512x512 grid, 512 agents transferred from pretrain
+- Food: linear gradient (0 at bottom, 20 at top) + Gaussian noise (amplitude=8)
   - Noise prevents agents from using food as y-coordinate proxy
 - Temperature: dynamic sinusoidal with depth-dependent decay and phase lag
-  - Formula: `T(z,t) = 0.5 + 0.5 * exp(-z/zd) * sin(2*pi*t/period - z/zd)`
-  - Period: 2000 steps, damping depth: 64 pixels
+  - Formula: `T(y,t) = mean(y) + 0.5 * exp(-z/zd) * sin(2*pi*t/period - z/zd)`
+  - Mean temperature: 0.5 at surface (y=511), 0.25 at bottom (y=0)
+  - Period: 1000 steps, damping depth: 128 pixels
+  - Range: 0.0 (surface cold phase) to 1.0 (surface hot phase)
 - Reproduction: 100% success at temp<=0.5, linear decay to 0% at temp=1.0
+- Aging: metabolic cost increases linearly with age (0.001 per step alive)
+- Temperature metabolism: optimal at temp=0.5, penalty for deviation
 - No toxin, attack does nothing
 
-**Research question**: Can agents learn to track optimal temperature zones that shift with the thermal wave?
+**Research question**: Can agents learn to track optimal temperature zones that shift with the thermal wave while balancing food availability (top) vs thermal comfort (varies)?
 
 ## Key Parameters
 
@@ -154,10 +171,13 @@ Tests temperature-seeking behavior inspired by C. elegans thermotaxis (Ramot et 
 
 ### Thermotaxis World
 - Size: 512x512
-- Initial agents: 1024 (transferred from pretrain)
-- Food: gradient (0 at bottom, 20 at top) + Gaussian noise (std=2.0)
-- Temperature: dynamic sinusoidal (period=2000, damping_depth=64)
+- Initial agents: 512 (transferred from pretrain)
+- Food: gradient (0 at bottom, 20 at top) + Gaussian noise (amplitude=8, length_scale=30)
+- Temperature: dynamic sinusoidal (period=1000, damping_depth=128)
+  - Mean: 0.5 at surface, 0.25 at bottom
 - Reproduction: temp-dependent (100% at <=0.5, 0% at 1.0)
+- Aging: base_cost_age_incremental=0.001 (cost += age * 0.001)
+- Temperature metabolism: base_cost_temperature_incremental=0.75 (cost += |temp-0.5| * 0.75)
 - No toxin, attack disabled
 
 ## Open Questions

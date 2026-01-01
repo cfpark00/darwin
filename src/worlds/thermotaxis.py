@@ -103,14 +103,13 @@ def compute_temperature(height: int, width: int, step: int,
                         period: int, damping_depth: float) -> jax.Array:
     """Compute temperature field for given simulation step.
 
-    Soil temperature model (Ramot et al. 2008):
-    T(z,t) = 0.5 + 0.5 * exp(-z/zd) * sin(2πt/p - z/zd)
+    Modified soil temperature model (inspired by Ramot et al. 2008):
+    - Mean temperature gradient: 0.5 at surface, 0.25 at bottom
+    - Oscillation amplitude decays with depth
+    - Phase lags with depth
 
-    Where:
-    - z = depth from surface = (height-1) - y
-    - zd = damping_depth
-    - p = period
-    - t = step
+    T(y,t) = mean(y) + 0.5 * exp(-z/zd) * sin(2πt/p - z/zd)
+    where mean(y) = 0.25 + 0.25 * (y / max_y)
 
     Args:
         height: Grid height
@@ -126,12 +125,15 @@ def compute_temperature(height: int, width: int, step: int,
     y_coords = jnp.arange(height).reshape(-1, 1)  # (height, 1)
     depth = max_y - y_coords  # depth from surface (0 at top, max at bottom)
 
+    # Mean temperature: 0.5 at surface, 0.25 at bottom
+    mean_temp = 0.25 + 0.25 * (y_coords / max_y)
+
     # Amplitude decay and phase lag both scale with depth/zd
     decay = jnp.exp(-depth / damping_depth)
     phase_lag = depth / damping_depth
 
-    # Oscillation: 0.5 + 0.5*sin() gives range [0, 1] at surface
-    temp = 0.5 + 0.5 * decay * jnp.sin(2 * jnp.pi * step / period - phase_lag)
+    # Oscillation around the mean
+    temp = mean_temp + 0.5 * decay * jnp.sin(2 * jnp.pi * step / period - phase_lag)
 
     # Broadcast to full grid (constant in x)
     return jnp.broadcast_to(temp, (height, width))

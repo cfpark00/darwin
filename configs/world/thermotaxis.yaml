@@ -13,7 +13,7 @@ arena:
   food_length_scale: 30.0
   # Temperature: sinusoidal at surface, decays + lags with depth
   temperature_period: 1000       # steps per cycle
-  temperature_damping_depth: 64  # depth at which amplitude decays by e
+  temperature_damping_depth: 128  # depth at which amplitude decays by e
 
 resource:
   eat_fraction: 0.33
@@ -30,10 +30,14 @@ energy:
   initial: 100.0
   max: 100.0
   offspring: 25.0
-  cost_eat: 0.5
-  cost_move: 3.0
-  cost_stay: 0.5
-  cost_reproduce: 30.0
+  base_cost: 0.5
+  base_cost_incremental: 0.01  # multiplied by energy (soft cap)
+  base_cost_age_incremental: 0.001  # multiplied by age (aging penalty)
+  base_cost_temperature_incremental: 0.75  # multiplied by temperature
+  cost_eat: 0.0
+  cost_move: 2.5
+  cost_stay: 0.0
+  cost_reproduce: 29.5
 
 # Reproduction: success probability depends on temperature
 reproduction:

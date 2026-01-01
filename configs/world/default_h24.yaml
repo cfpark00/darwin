@@ -31,11 +31,13 @@ energy:
   initial: 100.0
   max: 100.0
   offspring: 25.0
-  cost_eat: 0.5
-  cost_move: 3.0
-  cost_stay: 0.5
-  cost_reproduce: 30.0
-  cost_attack: 5.0
+  base_cost: 0.5
+  base_cost_incremental: 0.01  # multiplied by energy (soft cap)
+  cost_eat: 0.0
+  cost_move: 2.5
+  cost_stay: 0.0
+  cost_reproduce: 29.5
+  cost_attack: 4.5
 
 sensors:
   food_noise_std: 0.1
