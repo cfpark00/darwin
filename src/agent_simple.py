@@ -225,8 +225,19 @@ def agent_forward_fully_flat(flat_params: jax.Array, flat_state: jax.Array, obs:
     return new_flat_state, logits
 
 
-def sample_action(key: jax.Array, logits: jax.Array, temperature: float = 1.0) -> jax.Array:
-    """Sample action from logits using softmax with temperature."""
+def sample_action(key: jax.Array, logits: jax.Array, temperature: float = 1.0,
+                  action_mask: jax.Array = None) -> jax.Array:
+    """Sample action from logits using softmax with temperature.
+
+    Args:
+        key: PRNG key
+        logits: Raw logits from network (num_actions,)
+        temperature: Softmax temperature
+        action_mask: Optional boolean mask (num_actions,). True = allowed, False = disabled.
+    """
+    if action_mask is not None:
+        # Set disabled actions to -inf so they have 0 probability
+        logits = jnp.where(action_mask, logits, -jnp.inf)
     probs = jax.nn.softmax(logits / temperature)
     return random.categorical(key, jnp.log(probs + 1e-10))
 

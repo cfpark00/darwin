@@ -1,0 +1,43 @@
+# Darwin - Temporal Gaussian World for Simple Simulation
+# Time-varying resource field via Fourier phase rotation
+# Large blobs evolve slowly, small features change faster
+
+world:
+  size: 512
+  initial_agents: 512
+
+arena:
+  type: temporal_gaussian
+  resource_min: 0.0
+  resource_max: 30.0
+  resource_length_scale: 600.0
+  base_omega: 0.0002  # Slow evolution for agents to track
+  temperature_min: 0.0
+  temperature_max: 1.0
+  temperature_length_scale: 800.0
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+agent:
+  hidden_dim: 8
+  num_layers: 2
+  internal_noise_dim: 4
+  mutation_std: 0.1
+  action_temperature: 1.0
+
+energy:
+  initial: 100.0
+  max: 100.0
+  offspring: 25.0
+  base_cost: 0.5
+  base_cost_incremental: 0.01
+  cost_eat: 0.0
+  cost_move: 2.5
+  cost_stay: 0.0
+  cost_reproduce: 29.5
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1

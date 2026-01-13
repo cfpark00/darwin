@@ -180,6 +180,33 @@ def log_detailed(step: int, state: dict, stats: dict, output_dir: Path, world_co
         plt.savefig(output_dir / "figures" / "y_density.png", dpi=150)
         plt.close()
 
+    # X-density heatmap over time
+    if "x_density" in history and len(history["x_density"]) > 1:
+        x_density_array = np.array(history["x_density"]).T  # Shape: (x_bins, num_steps)
+        steps_array = np.array(history["steps"])
+
+        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+        # Normalize each column (timestep) to show density distribution
+        col_sums = x_density_array.sum(axis=0, keepdims=True)
+        col_sums = np.maximum(col_sums, 1)  # Avoid division by zero
+        x_density_norm = x_density_array / col_sums
+
+        im = ax.imshow(
+            x_density_norm,
+            aspect='auto',
+            origin='lower',
+            cmap='hot',
+            extent=[steps_array[0], steps_array[-1], 0, size],
+            interpolation='nearest'
+        )
+        ax.set_xlabel("Step")
+        ax.set_ylabel("X position")
+        ax.set_title("Agent X-Distribution Over Time (normalized density)")
+        plt.colorbar(im, ax=ax, label="Density")
+        plt.tight_layout()
+        plt.savefig(output_dir / "figures" / "x_density.png", dpi=150)
+        plt.close()
+
 
 def save_checkpoint(step: int, state: dict, sim: SimulationSimple, output_dir: Path):
     checkpoint = {

@@ -1,0 +1,21 @@
+# Darwin - Continue E500 with decaying resource regeneration
+# Regen timescale starts at 100, increases 10% every 100 steps
+
+output_dir: "data/run_e500_decay_regen"
+world_config: "configs/world/e500_decay_regen.yaml"
+
+seed: 42
+max_steps: 50000
+min_buffer_size: 4096
+
+continue:
+  checkpoint_path: "data/run_default_e500/checkpoints/ckpt_050000.pkl"
+
+dynamic_regen:
+  initial_timescale: 100.0    # Start with normal regen speed
+  growth_rate: 0.10           # +10% increase
+  growth_interval: 100        # Every 100 steps
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 2500

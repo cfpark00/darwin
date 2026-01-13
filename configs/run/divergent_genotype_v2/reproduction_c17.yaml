@@ -1,0 +1,21 @@
+# Reproduction rate experiment - Cluster 17 (n=1040, PC1=-34.7, LEFT side)
+# Part of divergent_genotype_v2 group
+
+output_dir: "data/divergent_genotype_v2/reproduction_c17"
+world_config: "configs/world/divergent_genotype_v2/reproduction.yaml"
+
+seed: 42
+max_steps: 5000
+min_buffer_size: 512
+
+logging:
+  detailed_interval: 500
+  checkpoint_interval: 500
+
+transfer:
+  checkpoint_path: "data/run_from_pretrain_simple/checkpoints/ckpt_050001.pkl"
+  cluster_assignments_path: "data/reference/genotype_clusters_v1/cluster_assignments.npz"
+  cluster_id: 17
+  num_agents: 256
+  initial_energy: 100.0
+  spawn_region: [96, 160, 96, 160]  # 64x64 centered region for spread

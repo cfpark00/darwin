@@ -139,10 +139,19 @@ class SimulationSimple:
         # Optional age/temperature penalties (default 0 for backward compatibility)
         self.base_cost_age_incremental = world_config["energy"].get("base_cost_age_incremental", 0.0)
         self.base_cost_temperature_incremental = world_config["energy"].get("base_cost_temperature_incremental", 0.0)
+        # Energy clamp: if set, clamp all energies to this value (immortal agents)
+        self.energy_clamp = world_config["energy"].get("clamp", None)
+        # Disabled actions: list of action indices to mask out (e.g., [5] to disable reproduce)
+        disabled_actions = world_config.get("disabled_actions", [])
+        self.action_mask = jnp.ones(6, dtype=bool)  # 6 actions for simple agent
+        for a in disabled_actions:
+            self.action_mask = self.action_mask.at[a].set(False)
         self.mutation_std = world_config["agent"]["mutation_std"]
         self.offspring_energy = world_config["energy"]["offspring"]
         self.eat_fraction = world_config["resource"]["eat_fraction"]
         self.regen_timescale = world_config["resource"]["regen_timescale"]
+        # Resource clamp: if True, resources don't deplete when eaten
+        self.resource_clamp = world_config["resource"].get("clamp", False)
 
         # Reproduction probability config (for thermotaxis)
         repro_config = world_config.get("reproduction", {})
@@ -153,6 +162,8 @@ class SimulationSimple:
         arena_type = world_config.get("arena", {}).get("type")
         self.is_thermotaxis = arena_type == "thermotaxis"
         self.is_pretrain = arena_type == "pretrain"
+        self.is_temporal_gaussian = arena_type == "temporal_gaussian"
+        self.is_orbiting_gaussian = arena_type == "orbiting_gaussian"
 
         # Action-specific costs - 6 actions only (no attack)
         # These are added on top of base_cost
@@ -185,17 +196,22 @@ class SimulationSimple:
         offspring_energy = self.offspring_energy
         eat_fraction = self.eat_fraction
         regen_timescale = self.regen_timescale
+        resource_clamp = self.resource_clamp
         action_costs = self._action_costs
         repro_temp_threshold = self.repro_temp_threshold
         repro_temp_max = self.repro_temp_max
+        energy_clamp = self.energy_clamp
+        action_mask = self.action_mask
 
-        @partial(jax.jit, static_argnums=(11,))
+        @partial(jax.jit, static_argnums=(14,))
         def step_jit(
             key,
             # World arrays
             world_resource, world_resource_base, world_temperature,
             # Agent arrays
             positions, orientations, params, agent_states, energies, alive, ages,
+            # Lineage tracking
+            uid, parent_uid, next_uid,
             # Scalar (static)
             max_agents
         ):
@@ -237,8 +253,8 @@ class SimulationSimple:
                 params, agent_states, observations, energies, noise
             )
 
-            # Sample actions (6 possible actions)
-            actions = vmap(lambda k, l: sample_action(k, l, action_temperature))(action_keys, all_logits)
+            # Sample actions (6 possible actions, with optional mask for disabled actions)
+            actions = vmap(lambda k, l: sample_action(k, l, action_temperature, action_mask))(action_keys, all_logits)
             actions = jnp.where(alive, actions, STAY)
 
             # === Phase 2: Energy costs ===
@@ -380,13 +396,39 @@ class SimulationSimple:
                 jnp.where(valid_arr[:, None], child_params, params[safe_dead_idx])
             )
 
+            # === Phase 4.5: Lineage tracking for offspring ===
+            # Get parent UIDs for offspring
+            parent_uids_for_offspring = uid[safe_parent_idx]
+
+            # Compute new UIDs using cumsum for parallel-safe sequential assignment
+            # valid_arr is (max_K,) boolean indicating which offspring are actually created
+            num_births = jnp.sum(valid_arr.astype(jnp.int32))
+            uid_offsets = jnp.cumsum(valid_arr.astype(jnp.int32)) - 1  # 0-indexed within this batch
+            new_offspring_uids = next_uid + uid_offsets
+
+            # Update uid and parent_uid arrays for offspring slots
+            uid = uid.at[safe_dead_idx].set(
+                jnp.where(valid_arr, new_offspring_uids, uid[safe_dead_idx])
+            )
+            parent_uid = parent_uid.at[safe_dead_idx].set(
+                jnp.where(valid_arr, parent_uids_for_offspring, parent_uid[safe_dead_idx])
+            )
+
+            # Update next_uid counter
+            next_uid = next_uid + num_births
+
             # === Phase 5: Eating ===
             is_eating = (actions == EAT) & alive
             eat_y, eat_x = positions[:, 0], positions[:, 1]
             available = world_resource[eat_y, eat_x]
             eat_amounts = jnp.where(is_eating, available * eat_fraction, 0.0)
             energies = energies + eat_amounts
-            world_resource = world_resource.at[eat_y, eat_x].add(-eat_amounts)
+            if not resource_clamp:
+                world_resource = world_resource.at[eat_y, eat_x].add(-eat_amounts)
+
+            # === Phase 5.5: Energy clamp (optional, for controlled experiments) ===
+            if energy_clamp is not None:
+                energies = jnp.where(alive, energy_clamp, energies)
 
             # === Phase 6: Energy deaths ===
             alive = alive & (energies > 0)
@@ -402,7 +444,9 @@ class SimulationSimple:
 
             return (
                 world_resource, positions, orientations, params,
-                agent_states, energies, alive, ages, actions, num_alive, has_collision
+                agent_states, energies, alive, ages, actions,
+                uid, parent_uid, next_uid,
+                num_alive, has_collision
             )
 
         return step_jit
@@ -438,6 +482,12 @@ class SimulationSimple:
         alive = jnp.zeros(max_agents, dtype=bool)
         alive = alive.at[:num_agents].set(True)
 
+        # Lineage tracking: founders get sequential UIDs, no parent
+        uid = jnp.zeros(max_agents, dtype=jnp.int32)
+        uid = uid.at[:num_agents].set(jnp.arange(num_agents, dtype=jnp.int32))
+        parent_uid = jnp.full(max_agents, -1, dtype=jnp.int32)  # -1 = no parent (founder)
+        next_uid = jnp.int32(num_agents)  # Next available UID
+
         return {
             "world": world,
             "positions": positions,
@@ -447,6 +497,9 @@ class SimulationSimple:
             "energies": energies,
             "ages": ages,
             "alive": alive,
+            "uid": uid,
+            "parent_uid": parent_uid,
+            "next_uid": next_uid,
             "max_agents": max_agents,
             "step": 0,
         }
@@ -501,6 +554,12 @@ class SimulationSimple:
         alive = jnp.zeros(max_agents, dtype=bool)
         alive = alive.at[:num_agents].set(True)
 
+        # Lineage tracking: founders get sequential UIDs, no parent
+        uid = jnp.zeros(max_agents, dtype=jnp.int32)
+        uid = uid.at[:num_agents].set(jnp.arange(num_agents, dtype=jnp.int32))
+        parent_uid = jnp.full(max_agents, -1, dtype=jnp.int32)  # -1 = no parent (founder)
+        next_uid = jnp.int32(num_agents)  # Next available UID
+
         return {
             "world": world,
             "positions": positions,
@@ -510,6 +569,9 @@ class SimulationSimple:
             "energies": energies,
             "ages": ages,
             "alive": alive,
+            "uid": uid,
+            "parent_uid": parent_uid,
+            "next_uid": next_uid,
             "max_agents": max_agents,
             "step": 0,
         }
@@ -532,6 +594,10 @@ class SimulationSimple:
 
         states = jnp.concatenate([state["states"], jnp.zeros((grow_by, self.state_dim))], axis=0)
 
+        # Extend lineage tracking arrays
+        uid = jnp.concatenate([state["uid"], jnp.zeros(grow_by, dtype=jnp.int32)])
+        parent_uid = jnp.concatenate([state["parent_uid"], jnp.full(grow_by, -1, dtype=jnp.int32)])
+
         actions = state.get("actions")
         if actions is not None:
             actions = jnp.concatenate([actions, jnp.zeros(grow_by, dtype=actions.dtype)])
@@ -545,6 +611,8 @@ class SimulationSimple:
             "energies": energies,
             "ages": ages,
             "alive": alive,
+            "uid": uid,
+            "parent_uid": parent_uid,
             "max_agents": new_max,
         }
         if actions is not None:
@@ -564,15 +632,24 @@ class SimulationSimple:
             world = thermotaxis.update_temperature(world, state["step"])
         elif self.is_pretrain:
             world = pretrain.update_food(world, state["step"])
+        elif self.is_temporal_gaussian:
+            from src.worlds import temporal_gaussian
+            world = temporal_gaussian.update_resource(world, state["step"], self.config)
+        elif self.is_orbiting_gaussian:
+            from src.worlds import orbiting_gaussian
+            world = orbiting_gaussian.update_resource(world, state["step"], self.config)
 
         (
             new_resource, new_positions, new_orientations, new_params,
-            new_states, new_energies, new_alive, new_ages, actions, num_alive, has_collision
+            new_states, new_energies, new_alive, new_ages, actions,
+            new_uid, new_parent_uid, new_next_uid,
+            num_alive, has_collision
         ) = self._step_jit(
             key,
             world["resource"], world["resource_base"], world["temperature"],
             state["positions"], state["orientations"], state["params"],
             state["states"], state["energies"], state["alive"], state["ages"],
+            state["uid"], state["parent_uid"], state["next_uid"],
             max_agents
         )
 
@@ -594,6 +671,9 @@ class SimulationSimple:
             "energies": new_energies,
             "ages": new_ages,
             "alive": new_alive,
+            "uid": new_uid,
+            "parent_uid": new_parent_uid,
+            "next_uid": new_next_uid,
             "max_agents": max_agents,
             "step": state["step"] + 1,
             "actions": actions,

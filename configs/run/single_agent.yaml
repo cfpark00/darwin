@@ -1,0 +1,18 @@
+# Single agent observation
+
+output_dir: "data/single_agent"
+world_config: "configs/world/single_agent.yaml"
+
+seed: 42
+max_steps: 1000
+min_buffer_size: 64
+
+logging:
+  detailed_interval: 50
+  checkpoint_interval: 100
+
+transfer:
+  checkpoint_path: "data/run_from_pretrain_simple/checkpoints/ckpt_050001.pkl"
+  num_agents: 1
+  initial_energy: 100.0
+  spawn_region: [128, 129, 128, 129]  # Center of arena

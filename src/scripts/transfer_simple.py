@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.simulation_simple import SimulationSimple, reset_timings, get_timings
 from src.utils import make_key, init_directory
 from src.physics import EAT, FORWARD, LEFT, RIGHT, STAY, REPRODUCE
+from src.agent_simple import compute_param_dim
 
 from src.scripts.run_simple import (
     ACTION_NAMES, compute_action_counts, log_base, log_detailed, save_checkpoint
@@ -39,8 +40,13 @@ def load_run_config(path: str) -> dict:
 
 
 def load_agents_from_checkpoint(checkpoint_path: str, num_agents: int, key: jax.Array,
+                                 expected_param_dim: int,
                                  position_filter: tuple = None) -> jax.Array:
-    """Load random agents from a checkpoint."""
+    """Load random agents from a checkpoint.
+
+    Raises:
+        ValueError: If checkpoint param_dim doesn't match expected_param_dim
+    """
     with open(checkpoint_path, 'rb') as f:
         checkpoint = pickle.load(f)
 
@@ -48,6 +54,17 @@ def load_agents_from_checkpoint(checkpoint_path: str, num_agents: int, key: jax.
     alive = state['alive']
     params = state['params']
     positions = state['positions']
+
+    # FAIL FAST: Validate param dimensions match
+    actual_param_dim = params.shape[1]
+    if actual_param_dim != expected_param_dim:
+        raise ValueError(
+            f"FATAL: Checkpoint param_dim mismatch!\n"
+            f"  Checkpoint has: {actual_param_dim}\n"
+            f"  Expected (simple agent): {expected_param_dim}\n"
+            f"  This likely means you're trying to load a full agent checkpoint (with toxin/attack)\n"
+            f"  into a simple simulation. Use transfer.py for full→full transfer."
+        )
 
     alive_mask = alive
 
@@ -75,8 +92,8 @@ def load_agents_from_checkpoint(checkpoint_path: str, num_agents: int, key: jax.
     return selected_params
 
 
-def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Path,
-                            agent_params: jax.Array, debug: bool = False) -> dict:
+def run_transfer_experiment(world_config: dict, world_config_path: str, run_config: dict,
+                            output_dir: Path, agent_params: jax.Array, debug: bool = False) -> dict:
     """Run experiment with pre-loaded agents."""
     reset_timings()
     seed = run_config["seed"]
@@ -90,10 +107,7 @@ def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Pa
     if spawn_region is not None:
         spawn_region = tuple(spawn_region)
 
-    with open(output_dir / "world_config.yaml", "w") as f:
-        yaml.dump(world_config, f)
-    with open(output_dir / "run_config.yaml", "w") as f:
-        yaml.dump(run_config, f)
+    shutil.copy(world_config_path, output_dir / "world_config.yaml")
 
     sim = SimulationSimple(world_config, run_config, debug=debug)
     key = make_key(seed)
@@ -106,8 +120,10 @@ def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Pa
         "population": [],
         "actions": [],
         "y_density": [],  # List of y-position histograms over time
+        "x_density": [],  # List of x-position histograms over time
     }
-    y_bins = 64  # Number of bins for y-position histogram
+    y_bins = 64  # Number of bins for position histograms
+    x_bins = 64
     world_size = world_config["world"]["size"]
 
     log_file = open(output_dir / "logs" / "base_log.jsonl", "w")
@@ -124,11 +140,14 @@ def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Pa
     history["population"].append(stats["num_alive"])
     action_counts = compute_action_counts(state, actions)
     history["actions"].append([action_counts[name] for name in ACTION_NAMES])
-    # Record y-density histogram
+    # Record position density histograms
     alive = state["alive"]
     y_positions = np.array(state["positions"][alive][:, 0])
+    x_positions = np.array(state["positions"][alive][:, 1])
     y_hist, _ = np.histogram(y_positions, bins=y_bins, range=(0, world_size))
+    x_hist, _ = np.histogram(x_positions, bins=x_bins, range=(0, world_size))
     history["y_density"].append(y_hist)
+    history["x_density"].append(x_hist)
 
     log_detailed(0, state, stats, output_dir, world_config, history)
     save_checkpoint(0, state, sim, output_dir)
@@ -147,11 +166,14 @@ def run_transfer_experiment(world_config: dict, run_config: dict, output_dir: Pa
             history["population"].append(stats["num_alive"])
             action_counts = compute_action_counts(state, actions)
             history["actions"].append([action_counts[name] for name in ACTION_NAMES])
-            # Record y-density histogram
+            # Record position density histograms
             alive = state["alive"]
             y_positions = np.array(state["positions"][alive][:, 0])
+            x_positions = np.array(state["positions"][alive][:, 1])
             y_hist, _ = np.histogram(y_positions, bins=y_bins, range=(0, world_size))
+            x_hist, _ = np.histogram(x_positions, bins=x_bins, range=(0, world_size))
             history["y_density"].append(y_hist)
+            history["x_density"].append(x_hist)
 
             pbar.set_postfix({
                 "alive": stats["num_alive"],
@@ -198,6 +220,11 @@ def main(config_path: str, overwrite: bool = False, debug: bool = False):
         raise ValueError("FATAL: 'world_config' path required for transfer experiment")
     world_config = load_world_config(world_config_path)
 
+    # Compute expected param dimension for validation
+    hidden_dim = world_config["agent"]["hidden_dim"]
+    internal_noise_dim = world_config["agent"]["internal_noise_dim"]
+    expected_param_dim = compute_param_dim(hidden_dim, internal_noise_dim)
+
     output_dir = init_directory(run_config["output_dir"], overwrite=overwrite)
     (output_dir / 'figures').mkdir(parents=True, exist_ok=True)
     (output_dir / 'logs').mkdir(parents=True, exist_ok=True)
@@ -213,7 +240,8 @@ def main(config_path: str, overwrite: bool = False, debug: bool = False):
     position_filter = transfer_config.get('position_filter', None)
     if position_filter is not None:
         position_filter = tuple(position_filter)
-    agent_params = load_agents_from_checkpoint(checkpoint_path, num_agents, load_key, position_filter)
+    agent_params = load_agents_from_checkpoint(checkpoint_path, num_agents, load_key,
+                                                expected_param_dim, position_filter)
 
     print(f"JAX devices: {jax.devices()}")
     print(f"Output dir: {output_dir}")
@@ -224,7 +252,7 @@ def main(config_path: str, overwrite: bool = False, debug: bool = False):
     print(f"Seed: {run_config['seed']}")
     print()
 
-    state = run_transfer_experiment(world_config, run_config, output_dir, agent_params, debug=debug)
+    state = run_transfer_experiment(world_config, world_config_path, run_config, output_dir, agent_params, debug=debug)
 
     stats = SimulationSimple(world_config, run_config).get_stats(state)
     print(f"\nFinal: {stats['num_alive']} agents alive at step {stats['step']}")

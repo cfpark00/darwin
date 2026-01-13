@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.simulation import Simulation, reset_timings, get_timings
 from src.utils import make_key, init_directory
 from src.physics import EAT, FORWARD, LEFT, RIGHT, STAY, REPRODUCE, ATTACK
+from src.agent import compute_param_dim
 
 # Import the run functions we can reuse
 from src.scripts.run import (
@@ -43,6 +44,7 @@ def load_run_config(path: str) -> dict:
 
 
 def load_agents_from_checkpoint(checkpoint_path: str, num_agents: int, key: jax.Array,
+                                 expected_param_dim: int,
                                  position_filter: tuple = None) -> jax.Array:
     """Load random agents from a checkpoint.
 
@@ -50,10 +52,14 @@ def load_agents_from_checkpoint(checkpoint_path: str, num_agents: int, key: jax.
         checkpoint_path: Path to checkpoint pickle file
         num_agents: Number of agents to sample
         key: PRNG key for random selection
+        expected_param_dim: Expected parameter dimension (MUST match checkpoint)
         position_filter: Optional (x_min, x_max, y_min, y_max) to filter by position
 
     Returns:
         (num_agents, param_dim) array of agent parameters
+
+    Raises:
+        ValueError: If checkpoint param_dim doesn't match expected_param_dim
     """
     with open(checkpoint_path, 'rb') as f:
         checkpoint = pickle.load(f)
@@ -62,6 +68,17 @@ def load_agents_from_checkpoint(checkpoint_path: str, num_agents: int, key: jax.
     alive = state['alive']
     params = state['params']
     positions = state['positions']  # (N, 2) array of [y, x]
+
+    # FAIL FAST: Validate param dimensions match
+    actual_param_dim = params.shape[1]
+    if actual_param_dim != expected_param_dim:
+        raise ValueError(
+            f"FATAL: Checkpoint param_dim mismatch!\n"
+            f"  Checkpoint has: {actual_param_dim}\n"
+            f"  Expected (full agent): {expected_param_dim}\n"
+            f"  This likely means you're trying to load a simple agent checkpoint (no toxin/attack)\n"
+            f"  into a full simulation. Use transfer_simple_to_full.py instead."
+        )
 
     # Get indices of alive agents
     alive_mask = alive
@@ -222,6 +239,11 @@ def main(config_path: str, overwrite: bool = False, debug: bool = False):
         raise ValueError("FATAL: 'world_config' path required for transfer experiment")
     world_config = load_world_config(world_config_path)
 
+    # Compute expected param dimension for validation
+    hidden_dim = world_config["agent"]["hidden_dim"]
+    internal_noise_dim = world_config["agent"]["internal_noise_dim"]
+    expected_param_dim = compute_param_dim(hidden_dim, internal_noise_dim)
+
     # Setup output directory
     output_dir = init_directory(run_config["output_dir"], overwrite=overwrite)
     (output_dir / 'figures').mkdir(parents=True, exist_ok=True)
@@ -240,7 +262,8 @@ def main(config_path: str, overwrite: bool = False, debug: bool = False):
     position_filter = transfer_config.get('position_filter', None)
     if position_filter is not None:
         position_filter = tuple(position_filter)
-    agent_params = load_agents_from_checkpoint(checkpoint_path, num_agents, load_key, position_filter)
+    agent_params = load_agents_from_checkpoint(checkpoint_path, num_agents, load_key,
+                                                expected_param_dim, position_filter)
 
     print(f"JAX devices: {jax.devices()}")
     print(f"Output dir: {output_dir}")

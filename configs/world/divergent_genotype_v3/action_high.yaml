@@ -1,0 +1,43 @@
+# Action profile experiment - HIGH resource (r=30)
+# Uniform resource, energy clamped, reproduction disabled
+# Part of divergent_genotype_v3 group
+
+disabled_actions: [5]  # Disable reproduce action (index 5)
+
+world:
+  size: 256
+  initial_agents: 256
+
+arena:
+  type: uniform
+  resource_level: 30.0
+  temperature_min: 0.0
+  temperature_max: 1.0
+  temperature_length_scale: 200.0
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+agent:
+  hidden_dim: 8
+  num_layers: 2
+  internal_noise_dim: 4
+  mutation_std: 0.1
+  action_temperature: 1.0
+
+energy:
+  initial: 100.0
+  max: 100.0
+  offspring: 25.0
+  base_cost: 0.5
+  base_cost_incremental: 0.01
+  cost_eat: 0.0
+  cost_move: 2.5
+  cost_stay: 0.0
+  cost_reproduce: 30.0
+  clamp: 100.0  # Immortal agents
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1

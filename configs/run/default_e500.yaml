@@ -1,0 +1,12 @@
+# Darwin v0.0 - Run Configuration (energy max 500)
+
+output_dir: "data/run_default_e500"
+world_config: "configs/world/default_e500.yaml"
+
+seed: 42
+max_steps: 50000
+min_buffer_size: 4096
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 2500

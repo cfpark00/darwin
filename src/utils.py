@@ -83,3 +83,101 @@ import jax
 def make_key(seed: int) -> jax.Array:
     """Create PRNG key."""
     return jax.random.PRNGKey(seed)
+
+
+def expand_simple_to_full_params(simple_params: jax.Array, hidden_dim: int = 8,
+                                  internal_noise_dim: int = 4) -> jax.Array:
+    """Expand simple agent params (6 in, 6 out) to full agent params (7 in, 7 out).
+
+    Simple agent: [food, temp, contact×4] → [eat, forward, left, right, stay, reproduce]
+    Full agent: [food, temp, toxin, contact×4] → [eat, forward, left, right, stay, reproduce, attack]
+
+    Toxin input weights initialized to 0 (agent ignores toxin initially).
+    Attack output weights initialized to 0 (attack logit = 0, low probability).
+
+    Args:
+        simple_params: Flat parameter vector from simple agent (1238 for h=8, noise=4)
+        hidden_dim: Hidden dimension (default 8)
+        internal_noise_dim: Internal noise dimension (default 4)
+
+    Returns:
+        Flat parameter vector for full agent (1279 for h=8, noise=4)
+    """
+    import jax.numpy as jnp
+
+    SIMPLE_INPUT = 6
+    FULL_INPUT = 7
+    SIMPLE_OUTPUT = 6
+    FULL_OUTPUT = 7
+    TOXIN_IDX = 2  # Where toxin is inserted in input
+
+    h = hidden_dim
+    input_dim_2 = h + 1 + internal_noise_dim  # LSTM2 input (same for both)
+
+    # Expected sizes
+    simple_lstm1_gate = SIMPLE_INPUT * h + h * h + h  # W_i + W_h + b
+    full_lstm1_gate = FULL_INPUT * h + h * h + h
+    lstm2_gate = input_dim_2 * h + h * h + h  # Same for both
+
+    simple_expected = 4 * simple_lstm1_gate + 4 * lstm2_gate + h * SIMPLE_OUTPUT + SIMPLE_OUTPUT
+    full_expected = 4 * full_lstm1_gate + 4 * lstm2_gate + h * FULL_OUTPUT + FULL_OUTPUT
+
+    if simple_params.shape[0] != simple_expected:
+        raise ValueError(f"FATAL: Expected simple params of size {simple_expected}, got {simple_params.shape[0]}")
+
+    result_parts = []
+    idx = 0
+
+    # === LSTM1: expand W_i matrices (insert zero row for toxin) ===
+    for gate in range(4):  # i, f, g, o gates
+        # W_i: (SIMPLE_INPUT, h) → (FULL_INPUT, h)
+        W_i_simple = simple_params[idx:idx + SIMPLE_INPUT * h].reshape(SIMPLE_INPUT, h)
+        idx += SIMPLE_INPUT * h
+
+        # Insert zero row at TOXIN_IDX
+        W_i_full = jnp.concatenate([
+            W_i_simple[:TOXIN_IDX],           # rows 0-1 (food, temp)
+            jnp.zeros((1, h)),                 # row 2 (toxin) - zeros
+            W_i_simple[TOXIN_IDX:]            # rows 2-5 → 3-6 (contacts)
+        ], axis=0)
+        result_parts.append(W_i_full.flatten())
+
+        # W_h: (h, h) - unchanged
+        W_h = simple_params[idx:idx + h * h]
+        idx += h * h
+        result_parts.append(W_h)
+
+        # b: (h,) - unchanged
+        b = simple_params[idx:idx + h]
+        idx += h
+        result_parts.append(b)
+
+    # === LSTM2: unchanged (input is h1 + energy + noise, not observations) ===
+    lstm2_size = 4 * lstm2_gate
+    result_parts.append(simple_params[idx:idx + lstm2_size])
+    idx += lstm2_size
+
+    # === Output layer: expand for attack action ===
+    # output_W: (h, SIMPLE_OUTPUT) → (h, FULL_OUTPUT)
+    output_W_simple = simple_params[idx:idx + h * SIMPLE_OUTPUT].reshape(h, SIMPLE_OUTPUT)
+    idx += h * SIMPLE_OUTPUT
+
+    # Add zero column for attack
+    output_W_full = jnp.concatenate([output_W_simple, jnp.zeros((h, 1))], axis=1)
+    result_parts.append(output_W_full.flatten())
+
+    # output_b: (SIMPLE_OUTPUT,) → (FULL_OUTPUT,)
+    output_b_simple = simple_params[idx:idx + SIMPLE_OUTPUT]
+    idx += SIMPLE_OUTPUT
+
+    # Add zero for attack bias
+    output_b_full = jnp.concatenate([output_b_simple, jnp.zeros((1,))])
+    result_parts.append(output_b_full)
+
+    # Concatenate all parts
+    full_params = jnp.concatenate(result_parts)
+
+    if full_params.shape[0] != full_expected:
+        raise ValueError(f"FATAL: Expansion produced {full_params.shape[0]} params, expected {full_expected}")
+
+    return full_params

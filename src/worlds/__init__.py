@@ -6,7 +6,7 @@ The arena type is specified in config["arena"]["type"].
 
 import jax
 
-from src.worlds import default, bridge, maze, thermotaxis, pretrain
+from src.worlds import default, bridge, maze, thermotaxis, pretrain, uniform, linear_gradient, temporal_gaussian, orbiting_gaussian
 from src.worlds.base import regenerate_resources
 
 # Registry of world types -> creator functions
@@ -16,6 +16,10 @@ WORLD_TYPES = {
     "maze": maze.create,
     "thermotaxis": thermotaxis.create,
     "pretrain": pretrain.create,
+    "uniform": uniform.create,
+    "linear_gradient": linear_gradient.create,
+    "temporal_gaussian": temporal_gaussian.create,
+    "orbiting_gaussian": orbiting_gaussian.create,
 }
 
 

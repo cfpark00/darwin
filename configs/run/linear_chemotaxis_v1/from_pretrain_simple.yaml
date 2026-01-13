@@ -1,0 +1,18 @@
+# Linear chemotaxis - agents from pretrain_simple
+
+output_dir: "data/linear_chemotaxis_v1/from_pretrain_simple"
+world_config: "configs/world/linear_chemotaxis_v1/default.yaml"
+
+seed: 42
+max_steps: 5000
+min_buffer_size: 256
+
+logging:
+  detailed_interval: 50
+  checkpoint_interval: 100
+
+transfer:
+  checkpoint_path: "data/run_from_pretrain_simple/checkpoints/ckpt_050001.pkl"
+  num_agents: 256
+  initial_energy: 30.0
+  spawn_region: [64, 192, 127, 129]  # y=64-192, x=127-128 (vertical line at center)

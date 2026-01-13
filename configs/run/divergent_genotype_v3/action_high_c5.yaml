@@ -1,0 +1,22 @@
+# Action profile experiment - HIGH resource - Cluster 5
+# Cluster 5: n=1324, PC1=38.2, RIGHT side of PC1
+# Part of divergent_genotype_v3 group
+
+output_dir: "data/divergent_genotype_v3/action_high_c5"
+world_config: "configs/world/divergent_genotype_v3/action_high.yaml"
+
+seed: 42
+max_steps: 2000
+min_buffer_size: 256
+
+logging:
+  detailed_interval: 100
+  checkpoint_interval: 500
+
+transfer:
+  checkpoint_path: "data/run_from_pretrain_simple/checkpoints/ckpt_050001.pkl"
+  cluster_assignments_path: "data/reference/genotype_clusters_v1/cluster_assignments.npz"
+  cluster_id: 5
+  num_agents: 256
+  initial_energy: 100.0
+  spawn_region: [112, 144, 112, 144]  # 32x32 centered grid

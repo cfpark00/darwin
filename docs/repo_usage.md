@@ -12,9 +12,9 @@
 - **Why**: Silent failures waste compute hours and corrupt research results
 
 ### 2. Implementation vs Orchestration
-- **Implementation (HOW)**: Lives in `src/` modules - reusable functions and core logic
-- **Orchestration (WHAT/WHEN)**: Lives in `src/scripts/` - experiment flow and coordination at Python level
-- **Bash scripts in `/scripts/`**: Minimal wrappers that just call Python scripts, e.g., `uv run python src/scripts/train.py configs/train/default.yaml`
+- **Implementation (HOW)**: Lives in `src/<track>/` modules - reusable functions and core logic
+- **Orchestration (WHAT/WHEN)**: Lives in `src/<track>/scripts/` - experiment flow and coordination at Python level
+- **Bash scripts in `/scripts/<track>/`**: Minimal wrappers that just call Python scripts, e.g., `uv run python src/behavioral/scripts/run_benchmark.py configs/behavioral/benchmark.yaml`
 
 ### 3. Abstraction Guidelines
 - **Just the right amount**: Do not over-abstract, aim for clarity over cleverness
@@ -25,6 +25,111 @@
 - Scripts should read like a story - each line is a meaningful step
 - Everything happens in `main()` function
 - Clear, sequential flow from config loading to execution
+
+## Research Tracks
+
+### Why Tracks?
+
+Research is fundamentally different from product development:
+
+- **Product development**: Linear progression where v1 → v2 → v3, each replacing the last
+- **Research**: Parallel exploration where you try approach A, gain an insight, then try completely different approach B, maybe C branches from A's insight but uses B's infrastructure...
+
+Unlike git branches where you eventually merge or abandon, research tracks often:
+- Run in parallel indefinitely
+- Inform each other without merging
+- Have completely different code, not just different parameters
+- Need to remain runnable even when you're focused on another track
+
+### What is a Track?
+
+A **track** is a self-contained research direction with its own code, configs, scripts, and outputs:
+
+```
+src/<track_name>/           # Track-specific implementation
+configs/<track_name>/       # Track-specific configs
+scripts/<track_name>/       # Track-specific bash scripts
+data/<track_name>/          # Track-specific outputs (gitignored)
+docs/tracks/<track_name>/   # Track-specific documentation
+```
+
+**Example with two tracks:**
+```
+src/
+├── utils.py                # Cross-track utilities (stable API)
+├── behavioral/             # Behavioral analysis track
+│   ├── utils.py            # Track-specific utilities
+│   ├── dat_scorer.py
+│   └── scripts/
+│       └── run_benchmark.py
+└── mechanistic/            # Mechanistic analysis track
+    ├── utils.py            # Track-specific utilities
+    ├── circuit_analysis.py
+    └── scripts/
+        └── run_intervention.py
+
+configs/
+├── behavioral/
+│   └── benchmark_gemini.yaml
+└── mechanistic/
+    └── ablation_study.yaml
+
+scripts/
+├── behavioral/
+│   └── run_benchmark.sh
+└── mechanistic/
+    └── run_ablation.sh
+
+data/
+├── behavioral/
+│   └── gemini_benchmark_001/
+└── mechanistic/
+    └── ablation_run_001/
+
+docs/
+├── repo_usage.md           # Cross-track documentation
+├── research_context.md     # Overall research context
+└── tracks/
+    ├── behavioral/         # Track-specific docs
+    │   ├── notes.md        # Tacit knowledge, decisions, insights
+    │   └── results.md      # Key findings summary
+    └── mechanistic/
+        └── notes.md
+```
+
+### Track Documentation
+
+Each track should have a `docs/tracks/<track_name>/` folder for:
+- **Tacit knowledge**: Design decisions, why certain approaches were chosen/abandoned
+- **Notes**: Observations, insights, things you'd forget in a month
+- **Results summaries**: Key findings without digging through data/
+- **Gotchas**: Known issues, edge cases, things that surprised you
+
+This documentation is invaluable when:
+- Returning to a track after working on another
+- Explaining the track to collaborators
+- Deciding whether to build on or abandon a track
+
+### When to Create a New Track
+
+**Create a new track when:**
+- You're exploring a fundamentally different approach or question
+- The code structure/abstractions would be significantly different
+- You want to preserve a working approach while experimenting with another
+- Insights from one direction lead to a completely different implementation
+
+**Do NOT create a new track for:**
+- Parameter variations (use different configs instead)
+- Bug fixes
+- Adding new models/providers to existing infrastructure
+- Incremental improvements to existing approach
+
+### Cross-Track Rules
+
+1. **Each track is self-contained** - no imports between tracks
+2. **Shared utilities only in `src/utils.py`** - and these must have stable APIs (see below)
+3. **Tracks can read each other's data** - for comparison/analysis, but not modify
+4. **No track is "primary"** - they're parallel, not hierarchical
 
 ## Script Organization
 
@@ -42,33 +147,28 @@ python src/scripts/<script_name>.py configs/<config_file>.yaml --overwrite --deb
 - Everything else should be in the config file
 
 ### Bash Scripts
-- All .sh scripts must be in `scripts/`
-- **It is advised to organize with subfolders** based on your project's needs
-- Example subfolders (these are just examples - use what makes sense for your project):
-  - `scripts/data_generation/`
-  - `scripts/training/`
-  - `scripts/evaluation/`
+- All .sh scripts must be in `scripts/<track>/`
+- Each track has its own scripts folder: `scripts/behavioral/`, `scripts/mechanistic/`, etc.
 - All .sh scripts should be as minimal as possible, mostly they simply keep track of what .py scripts should be ran to recreate the experiment
 - **IMPORTANT: Always pass through arguments using `"$@"`** to allow flags like `--overwrite` and `--debug` to be passed from bash to Python
 - Example:
   ```bash
   #!/bin/bash
-  uv run python src/scripts/train.py configs/train/default.yaml "$@"
+  uv run python src/behavioral/scripts/run_benchmark.py configs/behavioral/benchmark.yaml "$@"
   ```
-  This allows you to run: `bash scripts/train.sh --overwrite --debug`
+  This allows you to run: `bash scripts/behavioral/run_benchmark.sh --overwrite --debug`
 
 ### Config Files
-- All configs must be in `configs/`
-- **It is advised to organize with subfolders** based on your project's needs
-- Example subfolders (these are just examples - use what makes sense for your project):
-  - `configs/data/`
-  - `configs/experiments/`
-  - `configs/models/`
-- This organization makes it easy to find and manage different types of configs
+- All configs must be in `configs/<track>/`
+- Each track has its own configs folder: `configs/behavioral/`, `configs/mechanistic/`, etc.
+- Within a track, you can further organize by experiment type if needed:
+  - `configs/behavioral/benchmarks/`
+  - `configs/behavioral/ablations/`
+- This organization makes it easy to find and manage configs per track
 
 ### Python Scripts
-- Orchestration scripts (entry points) live in `src/scripts/`
-- Implementation modules live in `src/` (but not in `src/scripts/`)
+- Orchestration scripts (entry points) live in `src/<track>/scripts/`
+- Implementation modules live in `src/<track>/` (but not in `scripts/` subdirectory)
 - All orchestration scripts *must* read in *exactly* a `config_path` argument (required)
 - Optional flags: `--overwrite` (default False) and `--debug` (default False)
 - All orchestration scripts *must* write *all* results to the `output_dir` mentioned by config (error out if this is not given by the config)
@@ -84,13 +184,13 @@ def validate_config(config):
     # Check for required output_dir FIRST
     if 'output_dir' not in config:
         raise ValueError("FATAL: 'output_dir' is required in config")
-    
+
     # Check other required fields
     required_fields = ['experiment', 'model']  # Add your requirements
     for field in required_fields:
         if field not in config:
             raise ValueError(f"FATAL: '{field}' is required in config")
-    
+
     # Validate nested fields explicitly
     if 'learning_rate' not in config.get('training', {}):
         raise ValueError("FATAL: 'training.learning_rate' is required")
@@ -134,11 +234,43 @@ output_dir = init_directory(config['output_dir'], overwrite=args.overwrite)
 ```
 
 ### Code Organization
-- **Reusable utilities**: Put in `src/utils.py` - stateless functions used repetitively
-- **Orchestration scripts**: Put in `src/scripts/` - entry points that coordinate experiments
-- **Implementation modules**: Put in `src/` - domain-specific logic and classes
+
+**Utilities hierarchy:**
+- **`src/utils.py`** (cross-track): Stable, rarely-touched functions used across multiple tracks
+  - API must remain stable - changing signatures breaks multiple tracks
+  - Examples: `init_directory()`, `load_config()`, generic file I/O helpers
+  - Think of these as "infrastructure" - boring but reliable
+- **`src/<track>/utils.py`** (track-specific): Utilities specific to one track
+  - Can evolve freely without breaking other tracks
+  - Examples: track-specific data loaders, formatting functions, domain helpers
+
+**Code placement:**
+- **Orchestration scripts**: Put in `src/<track>/scripts/` - entry points that coordinate experiments
+- **Implementation modules**: Put in `src/<track>/` - track-specific logic and classes
 - Don't over-modularize - functions that do one complete operation are fine
 - Trust framework features (e.g., use HuggingFace's TrainingArguments instead of custom schedulers)
+
+### Resources Directory Usage
+The `resources/` folder is for reference materials that inform your research:
+
+- **Git repositories**: Clone external repos you're studying or referencing
+- **Papers**: Store PDFs of papers relevant to the research
+- **Documentation**: Keep external docs, specifications, or references
+- **Examples**: Reference implementations or code samples
+
+```bash
+# Example structure
+resources/
+├── repos/
+│   └── some-reference-repo/
+├── papers/
+│   ├── attention-is-all-you-need.pdf
+│   └── scaling-laws.pdf
+└── docs/
+    └── api-spec.md
+```
+
+This folder is gitignored - it's for local reference only, not committed to the repo.
 
 ### Scratch Directory Usage
 **CRITICAL: NEVER place files directly in `scratch/`!**
@@ -166,138 +298,176 @@ touch scratch/temp_script.py  # DO NOT put files directly in scratch/
 ### Running Scripts
 Always execute from project root:
 ```bash
-# Standard execution
-uv run python src/scripts/train.py configs/experiment.yaml
+# Via bash script (recommended)
+bash scripts/behavioral/run_benchmark.sh
+bash scripts/behavioral/run_benchmark.sh --overwrite --debug
 
-# With overwrite flag
-uv run python src/scripts/train.py configs/experiment.yaml --overwrite
+# Direct Python execution
+uv run python src/behavioral/scripts/run_benchmark.py configs/behavioral/benchmark.yaml
+
+# With flags
+uv run python src/behavioral/scripts/run_benchmark.py configs/behavioral/benchmark.yaml --overwrite
 
 # From activated environment
-python src/scripts/evaluate.py configs/eval_config.yaml
+python src/mechanistic/scripts/run_ablation.py configs/mechanistic/ablation.yaml
 ```
 
 ## Quick Decision Guide
-- "Could another experiment reuse this?" → Utility module in `src/`
-- "Is this specific to THIS experiment?" → Orchestration script in `src/scripts/`
-- "Is this HOW to do something?" → Implementation in `src/` modules
-- "Is this WHEN/WHETHER to do something?" → Orchestration in `src/scripts/`
+
+**Track decisions:**
+- "Is this a fundamentally different approach?" → New track in `src/<new_track>/`
+- "Is this a parameter/config variation?" → Same track, new config
+- "Is this a bug fix or incremental improvement?" → Same track, same code
+
+**Code placement:**
+- "Could ALL tracks reuse this with a stable API?" → `src/utils.py`
+- "Could experiments within THIS track reuse this?" → `src/<track>/utils.py`
+- "Is this specific to one experiment?" → Orchestration script in `src/<track>/scripts/`
+- "Is this HOW to do something?" → Implementation in `src/<track>/` modules
+- "Is this WHEN/WHETHER to do something?" → Orchestration in `src/<track>/scripts/`
 
 ## Standard Script Template
+
+For a script at `src/<track>/scripts/run_experiment.py`:
+
 ```python
 import argparse
 import yaml
 from pathlib import Path
+
+# Cross-track utilities (stable API)
 from src.utils import init_directory
+
+# Track-specific utilities (can import from parent track module)
+# from src.<track>.utils import some_helper
 
 def main(config_path, overwrite=False, debug=False):
     # Load config
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
-    
+
     # Validate config - fail fast!
     if 'output_dir' not in config:
         raise ValueError("FATAL: 'output_dir' required in config")
-    
+
     # Initialize output directory with safety checks
     output_dir = init_directory(config['output_dir'], overwrite=overwrite)
-    
+
     # Create standard subdirectories
     (output_dir / 'figures').mkdir(parents=True, exist_ok=True)
     (output_dir / 'results').mkdir(parents=True, exist_ok=True)
     (output_dir / 'logs').mkdir(parents=True, exist_ok=True)
-    
+
     # Debug mode handling
     if debug:
         print(f"DEBUG MODE: Output will be written to {output_dir}")
         # Add any debug-specific behavior
-    
+
     # Your experiment code here
-    
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('config_path', type=str, help='Path to config file')
     parser.add_argument('--overwrite', action='store_true', help='Overwrite output directory')
     parser.add_argument('--debug', action='store_true', help='Debug mode for testing')
     args = parser.parse_args()
-    
+
     main(args.config_path, args.overwrite, args.debug)
 ```
 
-## Analysis Scripts Pattern
-
-### Typical Analysis Workflow
-Analysis scripts follow a different pattern from experiment scripts. They read existing experiment results and create analysis outputs **within** the experiment directory, without modifying the original experiment data.
-
-**Config Structure for Analysis:**
-```yaml
-exp_dir: "data/my_experiment/run_001"  # Points to existing experiment
-output_dir: "data/my_experiment/run_001/analysis/my_analysis"  # Subdirectory within exp_dir
+**Corresponding bash script** at `scripts/<track>/run_experiment.sh`:
+```bash
+#!/bin/bash
+uv run python src/<track>/scripts/run_experiment.py configs/<track>/experiment.yaml "$@"
 ```
 
-**Key Principles:**
-- `exp_dir`: Points to the **experiment directory** containing results to analyze
-- `output_dir`: Points to where **analysis outputs** should be saved (typically `exp_dir/analysis/<analysis_name>/`)
-- Analysis scripts **never modify** the original experiment data
-- `--overwrite` flag only affects the analysis subdirectory, not the experiment itself
+## Downstream Scripts Pattern
 
-**Example Analysis Script:**
+### What is Downstream Work?
+
+Downstream scripts operate on the output of a previous run. This includes:
+- **Analysis**: plotting, statistics, summarization
+- **Mech interp**: probing, activation analysis, circuit discovery
+- **Fine-tuning**: further training on a checkpoint
+- **Data processing**: extracting subsets, reformatting, distribution analysis
+
+The key idea: run something expensive once, then do multiple cheaper downstream operations on it.
+
+### Config Structure for Downstream Scripts
+
+```yaml
+upstream_dir: "data/my_experiment/run_001"  # Points to existing run
+output_dir: "data/my_experiment/run_001/downstream/mech_interp"  # Subdirectory within upstream
+```
+
+### Key Principles
+
+- `upstream_dir`: Points to the **run directory** containing results to work on
+- `output_dir`: Points to where **downstream outputs** should be saved (typically `upstream_dir/downstream/<name>/`)
+- Downstream scripts **never modify** the upstream data
+- `--overwrite` flag only affects the downstream subdirectory, not the upstream
+- **Composable**: downstream of downstream is natural - just point `upstream_dir` to a previous downstream output
+
+### Example Downstream Script
+
 ```python
 def main(config_path, overwrite=False):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
     # Validate required fields
-    if 'exp_dir' not in config:
-        raise ValueError("FATAL: 'exp_dir' required for analysis")
+    if 'upstream_dir' not in config:
+        raise ValueError("FATAL: 'upstream_dir' required for downstream work")
     if 'output_dir' not in config:
         raise ValueError("FATAL: 'output_dir' required")
 
-    exp_dir = Path(config['exp_dir'])
+    upstream_dir = Path(config['upstream_dir'])
     output_dir = Path(config['output_dir'])
 
-    # Check experiment results exist
-    results_path = exp_dir / 'results' / 'research_results.json'
-    if not results_path.exists():
-        raise FileNotFoundError(f"Results not found at {results_path}")
+    # Check upstream results exist
+    if not upstream_dir.exists():
+        raise FileNotFoundError(f"Upstream dir not found: {upstream_dir}")
 
-    # Create analysis output directory (only overwrites analysis, not experiment!)
+    # Create downstream output directory (only overwrites this downstream, not upstream!)
     if output_dir.exists() and not overwrite:
-        raise ValueError(f"Analysis output {output_dir} exists. Use --overwrite to replace.")
+        raise ValueError(f"Output {output_dir} exists. Use --overwrite to replace.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load and analyze results
-    with open(results_path, 'r') as f:
-        data = json.load(f)
+    # Load upstream results and do downstream work
+    # ... your code here ...
 
-    # ... perform analysis ...
-
-    # Save analysis outputs to output_dir
-    plt.savefig(output_dir / 'plot.png')
-    with open(output_dir / 'summary.json', 'w') as f:
-        json.dump(summary, f)
+    # Save downstream outputs
+    # ...
 ```
 
-**Example Directory Structure After Analysis:**
+### Example Directory Structure
+
 ```
 data/my_experiment/run_001/
-├── config.yaml              # Original experiment config (untouched)
-├── results/
-│   └── research_results.json  # Original results (untouched)
+├── config.yaml              # Original run config (untouched)
+├── results/                 # Original results (untouched)
 ├── logs/                    # Original logs (untouched)
-└── analysis/                # Analysis outputs (can be overwritten)
-    ├── basic_analysis/
-    │   ├── plot.png
-    │   └── summary.json
-    └── detailed_analysis/
+└── downstream/
+    ├── mech_interp/         # First downstream
+    │   ├── config.yaml
+    │   ├── results/
+    │   └── downstream/      # Downstream of downstream!
+    │       └── attention_heads/
+    │           └── ...
+    ├── fine_tuning/         # Another downstream of run_001
+    │   └── ...
+    └── data_distribution/   # Yet another
         └── ...
 ```
 
-**Why This Pattern:**
-- Preserves experiment integrity - original data is never modified
-- Multiple analyses can be run on the same experiment
-- Analysis can be re-run with `--overwrite` without re-running expensive experiments
-- Clear separation between experiment data and derived analysis
+### Why This Pattern
+
+- **Preserves integrity**: upstream data is never modified
+- **Multiple downstream**: run many different operations on the same upstream
+- **Composable**: downstream of downstream works naturally
+- **Re-runnable**: `--overwrite` lets you iterate on downstream without re-running expensive upstream
+- **Clear lineage**: directory structure shows what depends on what
 
 ## Key Takeaways
 - **Implementation is HOW. Orchestration is WHAT/WHEN/WHETHER.**

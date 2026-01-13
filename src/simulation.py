@@ -221,13 +221,15 @@ class Simulation:
         repro_temp_threshold = self.repro_temp_threshold
         repro_temp_max = self.repro_temp_max
 
-        @partial(jax.jit, static_argnums=(11,))
+        @partial(jax.jit, static_argnums=(14,))
         def step_jit(
             key,
             # World arrays
             world_resource, world_resource_base, world_temperature, world_toxin,
             # Agent arrays
             positions, orientations, params, agent_states, energies, alive,
+            # Lineage tracking
+            uid, parent_uid, next_uid,
             # Scalar (static - determines array shapes)
             max_agents
         ):
@@ -462,6 +464,26 @@ class Simulation:
                 jnp.where(valid_arr[:, None], child_params, params[safe_dead_idx])
             )
 
+            # === Phase 6.5: Lineage tracking for offspring ===
+            # Get parent UIDs for offspring
+            parent_uids_for_offspring = uid[safe_parent_idx]
+
+            # Compute new UIDs using cumsum for parallel-safe sequential assignment
+            num_births = jnp.sum(valid_arr.astype(jnp.int32))
+            uid_offsets = jnp.cumsum(valid_arr.astype(jnp.int32)) - 1
+            new_offspring_uids = next_uid + uid_offsets
+
+            # Update uid and parent_uid arrays for offspring slots
+            uid = uid.at[safe_dead_idx].set(
+                jnp.where(valid_arr, new_offspring_uids, uid[safe_dead_idx])
+            )
+            parent_uid = parent_uid.at[safe_dead_idx].set(
+                jnp.where(valid_arr, parent_uids_for_offspring, parent_uid[safe_dead_idx])
+            )
+
+            # Update next_uid counter
+            next_uid = next_uid + num_births
+
             # Note: Parent energy cost is already handled in Phase 2 via cost_reproduce
 
             # === Phase 7: Eating ===
@@ -484,7 +506,9 @@ class Simulation:
 
             return (
                 world_resource, positions, orientations, params,
-                agent_states, energies, alive, actions, num_alive, has_collision, num_kills, num_toxin_deaths
+                agent_states, energies, alive, actions,
+                uid, parent_uid, next_uid,
+                num_alive, has_collision, num_kills, num_toxin_deaths
             )
 
         return step_jit
@@ -531,6 +555,12 @@ class Simulation:
         on_toxin = world["toxin"][positions[:, 0], positions[:, 1]] > 0.5
         alive = alive & ~on_toxin
 
+        # Lineage tracking: founders get sequential UIDs, no parent
+        uid = jnp.zeros(max_agents, dtype=jnp.int32)
+        uid = uid.at[:num_agents].set(jnp.arange(num_agents, dtype=jnp.int32))
+        parent_uid = jnp.full(max_agents, -1, dtype=jnp.int32)  # -1 = no parent (founder)
+        next_uid = jnp.int32(num_agents)  # Next available UID
+
         return {
             "world": world,
             "positions": positions,
@@ -539,6 +569,9 @@ class Simulation:
             "states": states,
             "energies": energies,
             "alive": alive,
+            "uid": uid,
+            "parent_uid": parent_uid,
+            "next_uid": next_uid,
             "max_agents": max_agents,
             "step": 0,
         }
@@ -613,6 +646,12 @@ class Simulation:
         on_toxin = world["toxin"][positions[:, 0], positions[:, 1]] > 0.5
         alive = alive & ~on_toxin
 
+        # Lineage tracking: founders get sequential UIDs, no parent
+        uid = jnp.zeros(max_agents, dtype=jnp.int32)
+        uid = uid.at[:num_agents].set(jnp.arange(num_agents, dtype=jnp.int32))
+        parent_uid = jnp.full(max_agents, -1, dtype=jnp.int32)  # -1 = no parent (founder)
+        next_uid = jnp.int32(num_agents)  # Next available UID
+
         return {
             "world": world,
             "positions": positions,
@@ -621,6 +660,9 @@ class Simulation:
             "states": states,
             "energies": energies,
             "alive": alive,
+            "uid": uid,
+            "parent_uid": parent_uid,
+            "next_uid": next_uid,
             "max_agents": max_agents,
             "step": 0,
         }
@@ -664,6 +706,10 @@ class Simulation:
         # Extend flat states
         states = jnp.concatenate([state["states"], jnp.zeros((grow_by, self.state_dim))], axis=0)
 
+        # Extend lineage tracking arrays
+        uid = jnp.concatenate([state["uid"], jnp.zeros(grow_by, dtype=jnp.int32)])
+        parent_uid = jnp.concatenate([state["parent_uid"], jnp.full(grow_by, -1, dtype=jnp.int32)])
+
         # Extend actions if present
         actions = state.get("actions")
         if actions is not None:
@@ -677,6 +723,8 @@ class Simulation:
             "states": states,
             "energies": energies,
             "alive": alive,
+            "uid": uid,
+            "parent_uid": parent_uid,
             "max_agents": new_max,
         }
         if actions is not None:
@@ -700,12 +748,15 @@ class Simulation:
 
         (
             new_resource, new_positions, new_orientations, new_params,
-            new_states, new_energies, new_alive, actions, num_alive, has_collision, num_kills, num_toxin_deaths
+            new_states, new_energies, new_alive, actions,
+            new_uid, new_parent_uid, new_next_uid,
+            num_alive, has_collision, num_kills, num_toxin_deaths
         ) = self._step_jit(
             key,
             world["resource"], world["resource_base"], world["temperature"], world["toxin"],
             state["positions"], state["orientations"], state["params"],
             state["states"], state["energies"], state["alive"],
+            state["uid"], state["parent_uid"], state["next_uid"],
             max_agents
         )
 
@@ -728,6 +779,9 @@ class Simulation:
             "states": new_states,
             "energies": new_energies,
             "alive": new_alive,
+            "uid": new_uid,
+            "parent_uid": new_parent_uid,
+            "next_uid": new_next_uid,
             "max_agents": max_agents,
             "step": state["step"] + 1,
             "actions": actions,
