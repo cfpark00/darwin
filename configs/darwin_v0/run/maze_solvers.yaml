@@ -1,0 +1,21 @@
+# Darwin - Maze Solver Transfer Experiment
+# Take agents that reached the goal, run them from start again
+
+output_dir: "data/darwin_v0/maze_solvers"
+world_config: "configs/darwin_v0/world/maze.yaml"
+
+# Source checkpoint - from maze run at step 2500
+transfer:
+  checkpoint_path: "data/darwin_v0/maze/checkpoints/ckpt_002500.pkl"
+  num_agents: 100
+  initial_energy: 100.0
+  spawn_region: [0, 32, 0, 32]  # Spawn at start cell (bottom-left)
+  position_filter: [224, 256, 224, 256]  # Select from goal cell (top-right) [x_min, x_max, y_min, y_max]
+
+seed: 1
+max_steps: 10000
+min_buffer_size: 4096
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 250

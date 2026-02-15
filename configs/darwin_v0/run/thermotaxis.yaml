@@ -1,0 +1,18 @@
+# Darwin - Thermotaxis Run Configuration (from pretrained agents)
+
+output_dir: "data/darwin_v0/run_thermotaxis"
+world_config: "configs/darwin_v0/world/thermotaxis.yaml"
+
+seed: 42
+max_steps: 50000
+min_buffer_size: 4096
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 2500
+
+# Transfer from pretrained checkpoint
+transfer:
+  checkpoint_path: "data/darwin_v0/run_pretrain/checkpoints/ckpt_010000.pkl"
+  num_agents: 512
+  initial_energy: 100.0

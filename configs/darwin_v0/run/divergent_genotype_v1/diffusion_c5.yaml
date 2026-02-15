@@ -1,0 +1,21 @@
+# Diffusion experiment - Cluster 5 (n=1324, PC1=38.2, PC2=-15.8)
+# Part of divergent_genotype_v1 group
+
+output_dir: "data/darwin_v0/divergent_genotype_v1/diffusion_c5"
+world_config: "configs/darwin_v0/world/divergent_genotype_v1/diffusion.yaml"
+
+seed: 42
+max_steps: 1000
+min_buffer_size: 256
+
+logging:
+  detailed_interval: 100
+  checkpoint_interval: 100
+
+transfer:
+  checkpoint_path: "data/darwin_v0/run_from_pretrain_simple/checkpoints/ckpt_050001.pkl"
+  cluster_assignments_path: "scratch/genotype_analysis_v1/cluster_assignments.npz"
+  cluster_id: 5
+  num_agents: 256
+  initial_energy: 100.0
+  spawn_region: [120, 136, 120, 136]  # 16x16 grid centered

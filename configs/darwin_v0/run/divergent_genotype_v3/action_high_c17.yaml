@@ -1,0 +1,22 @@
+# Action profile experiment - HIGH resource - Cluster 17
+# Cluster 17: n=1040, PC1=-34.7, LEFT side of PC1
+# Part of divergent_genotype_v3 group
+
+output_dir: "data/darwin_v0/divergent_genotype_v3/action_high_c17"
+world_config: "configs/darwin_v0/world/divergent_genotype_v3/action_high.yaml"
+
+seed: 42
+max_steps: 2000
+min_buffer_size: 256
+
+logging:
+  detailed_interval: 100
+  checkpoint_interval: 500
+
+transfer:
+  checkpoint_path: "data/darwin_v0/run_from_pretrain_simple/checkpoints/ckpt_050001.pkl"
+  cluster_assignments_path: "scratch/genotype_analysis_v1/cluster_assignments.npz"
+  cluster_id: 17
+  num_agents: 256
+  initial_energy: 100.0
+  spawn_region: [112, 144, 112, 144]  # 32x32 centered grid

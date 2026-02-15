@@ -1,0 +1,21 @@
+# Darwin - Bridge Explorer Transfer Experiment (2nd iteration)
+# Take explorers from explorers - even more selected for crossing
+
+output_dir: "data/darwin_v0/bridge_explorers2"
+world_config: "configs/darwin_v0/world/bridge.yaml"
+
+# Source checkpoint - from the first explorer experiment
+transfer:
+  checkpoint_path: "data/darwin_v0/bridge_explorers/checkpoints/ckpt_001750.pkl"
+  num_agents: 100
+  initial_energy: 100.0
+  spawn_region: [0, 256, 0, 32]  # Spawn on left side again
+  position_filter: [224, 256, 0, 256]  # Select from right fertile area [x_min, x_max, y_min, y_max]
+
+seed: 2
+max_steps: 8000
+min_buffer_size: 4096
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 250

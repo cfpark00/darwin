@@ -1,0 +1,19 @@
+# Darwin - Dynamic Maze Run Configuration
+# Goal moves when >100 agents reach it
+
+output_dir: "data/darwin_v0/maze_dynamic"
+world_config: "configs/darwin_v0/world/maze_dynamic.yaml"
+
+seed: 42
+max_steps: 50000
+min_buffer_size: 4096
+
+# Dynamic goal settings
+dynamic_goal:
+  threshold: 100  # Move goal when this many agents in goal cell
+  resource_fertile: 50.0
+  resource_normal: 12.0
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 2500

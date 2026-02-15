@@ -69,13 +69,15 @@ A 2D grid world where agents with neural network "brains" live, compete for reso
 - **JAX memory**: Typically use `export XLA_PYTHON_CLIENT_MEM_FRACTION=0.4` to run two experiments in parallel on a single GPU
 
 ### Experiment Groups
+**CRITICAL: ALL experiments MUST be organized into groups within tracks. Never place config/script files directly in the track's run/ or scripts/ directory.**
+
 A **group** is a collection of related experiments that share a common research question or experimental design. Groups are organized consistently across configs, scripts, and data:
 
 ```
-configs/run/<group_name>/     # YAML config files for each experiment
-configs/world/<group_name>/   # World configs (if needed)
-scripts/<group_name>/         # Bash scripts to run experiments
-data/<group_name>/            # Output data from all experiments in the group
+configs/<track>/run/<group_name>/     # YAML config files for each experiment
+configs/<track>/world/<group_name>/   # World configs (if needed)
+scripts/<track>/<group_name>/         # Bash scripts to run experiments
+data/<track>/<group_name>/            # Output data from all experiments in the group
 ```
 
 **Examples:**
@@ -89,9 +91,50 @@ data/<group_name>/            # Output data from all experiments in the group
 - Easy to run all experiments in a group via `scripts/<group>/run_all.sh`
 - Analysis scripts can iterate over `data/<group>/*/` to aggregate results
 
-## Current State (2026-01-07)
+## Current State (2026-01-18)
 
-### Completed
+### Track Structure
+Codebase organized into track structure:
+
+**darwin_v0** - Original simulation engine (legacy):
+- `src/darwin_v0/` - Python source code
+- `configs/darwin_v0/` - YAML configs (run/ and world/)
+- `scripts/darwin_v0/` - Bash execution scripts
+- `data/darwin_v0/` - Experiment outputs
+
+**evolvability_v1** - Redesigned framework (active):
+- `src/evolvability_v1/` - Unified engine with Environment/Agent abstraction
+- `configs/evolvability_v1/` - YAML configs organized by groups
+- `scripts/evolvability_v1/` - Bash execution scripts
+- `data/evolvability_v1/` - Experiment outputs
+- `docs/tracks/evolvability_v1/` - Track documentation
+
+Cross-track utilities remain at `src/utils.py`.
+
+### evolvability_v1 Framework
+New simulation framework with full darwin_v0 feature parity:
+- **Unified Agent**: Single implementation with configurable I/O dimensions (6, 7, or 8 depending on capabilities)
+- **Environment Abstraction**: Rich registry with many environment types (see below)
+- **Capability Flags**: `has_toxin`, `has_attack` on environments control I/O dimensions
+- **1.7x faster** than darwin_v0 with equivalent settings
+- **Clean composition**: Environment passed at init, no runtime world-type branching
+- **JIT-compiled metrics**: All stats computed inside JIT using masked reductions
+- **Physics-based reproduction**: No artificial cap, limited only by dead slots and empty cells
+- **Dynamic buffer growth**: Automatic buffer expansion at configurable threshold (default 50%)
+- **Controlled experiments**: `energy_clamp`, `resource_clamp`, `disabled_actions` for "neuro" experiments
+- **Checkpoint loading**: `--from-checkpoint` with optional `spawn_region` for diffusion experiments
+
+Current environments: SimpleEnvironment, GaussianEnvironment, UniformEnvironment, FullEnvironment, GaussianToxinEnvironment, PretrainEnvironment, BridgeEnvironment, TemporalGaussianEnvironment, OrbitingGaussianEnvironment, ToxinPatternEnvironment, CyclingEnvironment
+
+### Recent Diffusion Experiment (2026-01-18)
+Tested resource-dependent diffusion in evolvability_v1:
+- 256 agents spawned in 16x16 centered region, energy clamped at 30, reproduction disabled
+- Compared resource=10 (low) vs resource=25 (high)
+- **Finding**: Higher resources → 3.5x higher diffusion (D=0.0135 vs D=0.0038)
+- This is opposite to darwin_v0 finding where lower resources led to more movement
+- Possible explanation: pretrained agents learned to eat when food is detected, requiring more movement when food is everywhere
+
+### Completed (as of 2026-01-07)
 - Core simulation with collision-free movement and reproduction
 - Modular world system (`src/worlds/`) for different arena types
 - Transfer experiment infrastructure (load evolved agents into new environments)

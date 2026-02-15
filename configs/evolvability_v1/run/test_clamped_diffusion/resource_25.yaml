@@ -1,0 +1,59 @@
+# Test: Clamped diffusion with high resources
+# - Energy clamped to 30 (immortal agents)
+# - Reproduction disabled
+# - Resources clamped to 25
+# - Agents spawned in centered 16x16 region for diffusion measurement
+# Start from pretrain checkpoint
+
+output_dir: "data/evolvability_v1/test_clamped_diffusion/resource_25"
+
+seed: 42
+max_steps: 5000
+initial_agents: 256
+min_buffer_size: 4096
+
+# Spawn region for diffusion experiments [y_min, y_max, x_min, x_max]
+# 16x16 centered region in 256x256 arena
+spawn_region: [120, 136, 120, 136]
+
+world:
+  size: 256
+
+environment:
+  type: pretrain
+  food_init: 25.0
+  food_final: 25.0
+  food_decay_steps: 1
+
+agent:
+  hidden_dim: 8
+  internal_noise_dim: 4
+  mutation_std: 0.1
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1
+
+energy:
+  max: 100.0
+  initial: 30.0  # Initial energy for spawned agents
+  clamp: 30.0  # Immortal agents with fixed energy
+  base_cost: 0.5
+  base_cost_incremental: 0.01
+  cost_eat: 0.0
+  cost_move: 2.5
+  cost_stay: 0.0
+  cost_reproduce: 29.5
+  offspring: 25.0
+
+resource:
+  clamp: 25.0  # Fixed resource level
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+disabled_actions: [5]  # Disable reproduce (action index 5)
+
+logging:
+  interval: 10
+  checkpoint_interval: 1000
+  detailed_interval: 100

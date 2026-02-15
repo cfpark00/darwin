@@ -272,6 +272,59 @@ resources/
 
 This folder is gitignored - it's for local reference only, not committed to the repo.
 
+### Data Sharing with DVC
+
+We use [DVC (Data Version Control)](https://dvc.org/) to share data across machines and collaborators. DVC tracks large files via small `.dvc` manifest files committed to git, while actual data lives in a remote storage backend (S3).
+
+**Why DVC:**
+- Decoupled from git — no hooks/filters, repo works fine without DVC installed
+- Content-addressed storage — deduplication, only changed files re-uploaded
+- Selective tracking — `dvc add` only what needs sharing, not all of `data/`
+- Version-pinned — each git commit pins exact data versions via `.dvc` manifests
+
+**Setup (one-time per repo):**
+```bash
+uv add dvc dvc-s3          # Install DVC with S3 backend
+dvc init                    # Initialize DVC in repo
+dvc remote add -d storage s3://your-bucket-name
+```
+
+**Tracking data:**
+```bash
+# Track a specific directory (creates data/my_experiment.dvc manifest)
+dvc add data/my_experiment
+
+# Commit the manifest to git (small text file with hashes)
+git add data/my_experiment.dvc data/.gitignore
+git commit -m "Track my_experiment data"
+
+# Push actual data to S3
+dvc push
+```
+
+**Pulling data on another machine:**
+```bash
+git pull                    # Get .dvc manifests
+uv sync                    # Install DVC
+dvc pull                    # Download tracked data from S3
+```
+
+**Key principles:**
+- **Track at the right granularity** — `dvc add` entire experiment directories, not individual files. You can't partially pull a tracked directory.
+- **Only track what needs sharing** — training data, checkpoints needed for downstream eval, final results. Don't track intermediate/debug outputs.
+- **Never modify tracked data without re-adding** — after changing tracked files, run `dvc add` again to update the manifest.
+- **Credentials** — for small teams, shared AWS credentials in `.dvc/config` is fine. For larger teams, use IAM roles.
+
+**`.gitignore` pattern for DVC:**
+```
+data/**          # ignore all files recursively
+!data/**/        # un-ignore directories (so git descends into them)
+!data/**/*.dvc   # un-ignore .dvc manifests at any depth
+!data/.gitkeep
+```
+
+The key trick: `data/**` ignores files AND directories, but `!data/**/` un-ignores just directories. This lets git descend into subdirectories to find `.dvc` files at any nesting depth.
+
 ### Scratch Directory Usage
 **CRITICAL: NEVER place files directly in `scratch/`!**
 

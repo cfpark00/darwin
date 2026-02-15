@@ -1,0 +1,3 @@
+#!/bin/bash
+# Diffusion experiment - resource level 10
+uv run python src/darwin_v0/scripts/transfer_simple.py configs/darwin_v0/run/diffusion/r10.yaml "$@"

@@ -1,0 +1,47 @@
+# Demo: Toxin ring environment
+# Full environment with toxin ring around center
+# Tests avoidance behavior and attack capabilities
+
+output_dir: "data/evolvability_v1/demo/toxin_ring"
+
+seed: 42
+max_steps: 5000
+initial_agents: 256
+min_buffer_size: 1024
+
+world:
+  size: 256
+
+environment:
+  type: toxin_pattern
+  pattern: ring
+
+agent:
+  hidden_dim: 8
+  internal_noise_dim: 4
+  mutation_std: 0.1
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1
+  toxin_noise_std: 0.1
+
+energy:
+  max: 100.0
+  base_cost: 0.5
+  base_cost_incremental: 0.01
+  cost_eat: 0.0
+  cost_move: 2.5
+  cost_stay: 0.0
+  cost_reproduce: 29.5
+  cost_attack: 5.0
+  offspring: 25.0
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+logging:
+  interval: 10
+  checkpoint_interval: 1000
+  detailed_interval: 100

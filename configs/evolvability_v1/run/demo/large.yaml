@@ -1,0 +1,46 @@
+# Demo: Large-scale simulation
+# 512x512 world, 512 initial agents, 50k steps
+
+output_dir: "data/evolvability_v1/demo/large"
+
+seed: 42
+max_steps: 50000
+initial_agents: 512
+min_buffer_size: 2048
+
+world:
+  size: 512
+
+environment:
+  type: gaussian
+  resource_mean: 15.0
+  resource_max: 30.0
+  resource_length_scale: 50.0
+
+agent:
+  hidden_dim: 8
+  internal_noise_dim: 4
+  mutation_std: 0.1
+
+sensors:
+  food_noise_std: 0.1
+  temperature_noise_std: 0.1
+
+energy:
+  max: 100.0
+  base_cost: 0.5
+  base_cost_incremental: 0.01
+  cost_eat: 0.0
+  cost_move: 2.5
+  cost_stay: 0.0
+  cost_reproduce: 29.5
+  offspring: 25.0
+
+resource:
+  eat_fraction: 0.33
+  regen_timescale: 100.0
+
+logging:
+  interval: 50
+  checkpoint_interval: 5000
+  detailed_interval: 500

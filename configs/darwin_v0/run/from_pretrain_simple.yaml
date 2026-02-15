@@ -1,0 +1,19 @@
+# Darwin - Transfer from Pretrain to Default-like Simple Environment
+# Uses simple agent (6 in/out), Gaussian resources, no toxin
+
+output_dir: "data/darwin_v0/run_from_pretrain_simple"
+world_config: "configs/darwin_v0/world/default_simple.yaml"
+
+seed: 42
+max_steps: 50000
+min_buffer_size: 4096
+
+logging:
+  detailed_interval: 250
+  checkpoint_interval: 2500
+
+# Transfer from pretrained simple agents
+transfer:
+  checkpoint_path: "data/darwin_v0/run_pretrain/checkpoints/ckpt_010001.pkl"
+  num_agents: 512
+  initial_energy: 100.0
